@@ -1,24 +1,46 @@
 import os
 from google import genai
 
-def ask_flight_director_ai(state_vector, user_query):
+def ask_flight_director_ai(state_vector: dict, user_query: str) -> str:
+    """
+    Copiloto IA de Misión Espacial. Recibe el vector de estado dinámico y responde
+    preguntas de ingeniería, análisis de riesgos y procedimientos de contingencia.
+    """
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
-        return "Error: GEMINI_API_KEY no configurada en el servidor."
+        return "⚠️ Error MCC: Variable de entorno GEMINI_API_KEY no configurada en el servidor."
         
-    client = genai.Client(api_key=api_key)
-    
-    prompt = f"""
-    Eres el Copiloto Experto de Misión para el Centro de Control ODYSSEY-1.
-    Vector de Estado Actual del Cohete:
-    - Posición/Altitud/Velocidad: {state_vector}
-    
-    Responde a la consulta técnica del Director de Vuelo con rigor ingenieril aeroespacial:
-    Consulta: {user_query}
-    """
-    
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text
+    try:
+        client = genai.Client(api_key=api_key)
+        
+        system_instructions = """
+        Eres el Copiloto de Inteligencia Artificial del Centro de Control de Misión ODYSSEY-1 (NASA/ESA).
+        Tu función es analizar la telemetría en tiempo real, evaluar riesgos ingenieriles de vuelo orbital y redactar procedimientos formales de recuperación o checklists de emergencia cuando se detecten anomalías o se te solicite.
+        Responde siempre con rigor técnico de ingeniería aeroespacial de forma clara, directa y estructurada.
+        """
+        
+        prompt = f"""
+        {system_instructions}
+        
+        ==== VECTOR DE ESTADO EN TIEMPO REAL ====
+        - Altitud: {state_vector.get('altitud_km', 'N/A')} km
+        - Velocidad Orbital: {state_vector.get('velocidad_kms', 'N/A')} km/s
+        - Estado FDIR: {state_vector.get('estado_fdir', 'NOMINAL')}
+        - Anomalía Detectada: {state_vector.get('falla_fdir', 'NONE')}
+        - Estado de Subsistemas: {state_vector.get('matriz_subsistemas', {})}
+        - Seguridad SDLS/CCSDS: {state_vector.get('sdls_status', 'VALID')}
+        ========================================
+        
+        Consulta del Director de Vuelo: "{user_query}"
+        
+        Diagnóstico / Procedimiento de Respuesta:
+        """
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text
+        
+    except Exception as e:
+        return f"⚠️ Error en procesamiento del copiloto Gemini AI: {str(e)}"

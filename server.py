@@ -47,7 +47,8 @@ async def ask_ai(data: AIQuery):
         "velocidad_kms": round(speed_kms, 2),
         "estado_fdir": fdir.status,
         "falla_fdir": fdir.injected_fault,
-        "matriz_subsistemas": fdir.subsystems
+        "matriz_subsistemas": fdir.subsystems,
+        "sdls_status": "AUTHENTICATED_VALID"
     }
     
     response = ai_copilot.ask_flight_director_ai(state_summary, data.query)
@@ -66,13 +67,13 @@ async def websocket_telemetry(websocket: WebSocket):
             pos = state_real[:3]
             vel = state_real[3:]
             
-            # 1. Física espacial
+            # 1. Física espacial con J2 y Arrastre
             acc = physics_engine.calculate_accelerations(pos, vel, mass, cd, area)
             vel = vel + acc * dt
             pos = pos + vel * dt
             state_real = np.hstack([pos, vel])
             
-            # 2. UKF Navegación
+            # 2. Navegación UKF
             ukf.predict(dt, imu_acceleration=acc)
             gps_measured = pos + np.random.normal(0, 8.0, 3)
             ukf.update(gps_measured)
@@ -81,7 +82,7 @@ async def websocket_telemetry(websocket: WebSocket):
             # 3. FDIR Autónomo
             fdir_action = fdir.evaluate_telemetry(state_real, state_estimated)
             
-            # 4. Encriptación y Empaquetado CCSDS + SDLS
+            # 4. CCSDS / SDLS Security
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
             payload_str = f"ALT:{alt_m:.1f};VEL:{speed_ms:.1f};FDIR:{fdir.status}"

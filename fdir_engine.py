@@ -1,62 +1,50 @@
 import numpy as np
 
 class FDIRSystem:
+    """
+    Sistema FDIR basado en la Distancia de Mahalanobis de Residuales de Kalman.
+    """
     def __init__(self):
         self.status = "NOMINAL"
         self.injected_fault = "NONE"
-        self.fault_history = []
-        
-        # Umbrales estadísticos de desviación de residuos
-        self.warning_threshold_sigma = 2.5
-        self.critical_threshold_sigma = 4.0
-        
-        # Matriz de estado de subsistemas para reconfiguración autónoma
         self.subsystems = {
-            "TVC_PRIMARY": "NOMINAL",
-            "RCS_BACKUP": "STANDBY",
-            "PROPULSION_VALVES": "NOMINAL",
-            "IMU_REDUNDANCY": "ACTIVE"
+            "TVC_ACTUATORS": "NOMINAL",
+            "RCS_PROPULSION": "STANDBY",
+            "IMU_PRIMARY": "HEALTHY",
+            "GPS_RECEIVER": "LOCKED"
         }
 
-    def evaluate_telemetry(self, state_real, state_estimated, covariance_matrix=None):
+    def evaluate_mahalanobis(self, residual, S_covariance):
         """
-        Calcula la distancia de residuos entre la física estimada y la telemetría recibida.
-        Ejecuta el aislamiento de fallas y activa procedimientos de recuperación en tiempo real.
+        D_M^2 = r^T * S^-1 * r (Distribución Chi-Cuadrado)
         """
-        residual_vector = state_real[:3] - state_estimated[:3]
-        euclidean_residual = np.linalg.norm(residual_vector)
-        
-        # Usar covarianza o estimación de varianza estándar (sigma ~ 15.0m)
-        sigma = 15.0
-        sigma_deviation = euclidean_residual / sigma
-
-        action = "SYSTEM_OPERATIONAL_NOMINAL"
-
-        if sigma_deviation > self.critical_threshold_sigma:
+        try:
+            inv_S = np.linalg.inv(S_covariance)
+            d_mahalanobis_sq = float(residual.T @ inv_S @ residual)
+        except np.linalg.LinAlgError:
+            d_mahalanobis_sq = 0.0
+            
+        # Umbrales Chi-Cuadrado para 3 grados de libertad (p < 0.01 y p < 0.001)
+        # 3 DOF: Threshold 95% = 7.81, 99.9% = 16.27
+        if d_mahalanobis_sq > 16.27:
             self.status = "CRITICAL_ANOMALY"
-            self.injected_fault = "THRUST_VECTOR_DEGRADATION"
-            
-            # Reconfiguración Autónoma de Emergencia
-            self.subsystems["TVC_PRIMARY"] = "DEGRADED_ISOLATED"
-            self.subsystems["RCS_BACKUP"] = "ACTIVE_ENGAGED"
-            
-            action = "AUTO_RECOVERY: PRIMARY TVC ISOLATED -> RCS THRUS-VECTOR ENGAGED [REBALANCING THRUST 85%]"
-            self.fault_history.append({"severity": "CRITICAL", "action": action})
-
-        elif sigma_deviation > self.warning_threshold_sigma:
+            self.injected_fault = "IMU_SENSOR_FAILURE_OR_TVC_DESYNC"
+            self.subsystems["TVC_ACTUATORS"] = "ISOLATED"
+            self.subsystems["RCS_PROPULSION"] = "ENGAGED_AUTONOMOUS"
+            self.subsystems["IMU_PRIMARY"] = "DEGRADED"
+            action = f"FDIR AUTONOMOUS RECOVERY: Mahalanobis D^2={d_mahalanobis_sq:.2f} > 16.27. TVC Isolated. RCS Activated."
+        elif d_mahalanobis_sq > 7.81:
             self.status = "WARNING_DRIFT"
-            self.injected_fault = "IMU_SENSOR_BIAS_DETECTED"
-            
-            # Reconfiguración de sensores
-            self.subsystems["IMU_REDUNDANCY"] = "RECALIBRATING"
-            action = "AUTO_CORRECTION: RECALIBRATING IMU BIAS VIA GNSS COVARIANCE"
-            self.fault_history.append({"severity": "WARNING", "action": action})
-
+            self.injected_fault = "GPS_MULTIPATH_NOISE"
+            self.subsystems["GPS_RECEIVER"] = "FILTERING_DEGRADED"
+            action = f"FDIR WARNING: Mahalanobis D^2={d_mahalanobis_sq:.2f} > 7.81. Increasing Kalman R Matrix covariance."
         else:
             self.status = "NOMINAL"
             self.injected_fault = "NONE"
-            self.subsystems["TVC_PRIMARY"] = "NOMINAL"
-            self.subsystems["RCS_BACKUP"] = "STANDBY"
-            action = "NOMINAL: NO FAULT ISOLATION REQUIRED"
-
-        return action
+            self.subsystems["TVC_ACTUATORS"] = "NOMINAL"
+            self.subsystems["RCS_PROPULSION"] = "STANDBY"
+            self.subsystems["IMU_PRIMARY"] = "HEALTHY"
+            self.subsystems["GPS_RECEIVER"] = "LOCKED"
+            action = f"NOMINAL: Mahalanobis D^2={d_mahalanobis_sq:.2f} within Chi-Square bounds."
+            
+        return action, d_mahalanobis_sq

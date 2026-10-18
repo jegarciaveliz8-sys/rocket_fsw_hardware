@@ -1,56 +1,108 @@
 import numpy as np
 
 class RocketUKF:
+    """
+    Unscented Kalman Filter para Estimación de Posición, Velocidad y Sesgo de IMU.
+    Estado x (9D): [px, py, pz, vx, vy, vz, bias_ax, bias_ay, bias_az]
+    """
     def __init__(self):
-        self.n = 6
+        self.n = 9
         self.x = np.zeros(self.n)
-        self.P = np.eye(self.n) * 50.0
-        # Matriz de ruido de proceso (Inercial / Deriva)
-        self.Q = np.diag([0.05, 0.05, 0.05, 0.1, 0.1, 0.1])
-        # Matriz de ruido de medida (GPS con mayor incertidumbre de alta frecuencia)
-        self.R = np.eye(3) * 12.5
-
-    def initialize(self, initial_state):
-        self.x = np.copy(initial_state)
-
-    def predict(self, dt, imu_acceleration):
-        """
-        Predicción basada en la dinámica cinemática y la aceleración medida por la IMU.
-        """
-        px, py, pz, vx, vy, vz = self.x
+        self.P = np.eye(self.n) * 100.0
         
-        # Integración con la aceleración real del cohete provista por la IMU
-        ax, ay, az = imu_acceleration
+        # Parámetros Unscented Transformation (Julier-Uhlmann / Van der Merwe)
+        self.alpha = 1e-3
+        self.beta = 2.0
+        self.kappa = 0.0
+        self.lambda_ = (self.alpha**2) * (self.n + self.kappa) - self.n
         
-        px_new = px + vx * dt + 0.5 * ax * (dt**2)
-        py_new = py + vy * dt + 0.5 * ay * (dt**2)
-        pz_new = pz + vz * dt + 0.5 * az * (dt**2)
+        # Pesos de Sigma Points
+        self.Wm = np.zeros(2 * self.n + 1)
+        self.Wc = np.zeros(2 * self.n + 1)
         
-        vx_new = vx + ax * dt
-        vy_new = vy + ay * dt
-        vz_new = vz + az * dt
+        self.Wm[0] = self.lambda_ / (self.n + self.lambda_)
+        self.Wc[0] = self.Wm[0] + (1.0 - self.alpha**2 + self.beta)
         
-        self.x = np.array([px_new, py_new, pz_new, vx_new, vy_new, vz_new])
-        
-        # Matriz de transición Jacobiana F
-        F = np.eye(self.n)
-        for i in range(3):
-            F[i, i+3] = dt
+        for i in range(1, 2 * self.n + 1):
+            self.Wm[i] = 0.5 / (self.n + self.lambda_)
+            self.Wc[i] = self.Wm[i]
             
-        self.P = F @ self.P @ F.T + self.Q
+        self.Q = np.diag([0.01]*3 + [0.05]*3 + [1e-5]*3)
+        self.R = np.diag([10.0]*3)  # Varianza de ruido GPS (m^2)
 
-    def update(self, gps_position_measured):
-        """
-        Corrección/Actualización del estado utilizando la posición GPS medida.
-        """
-        H = np.zeros((3, self.n))
-        H[0, 0] = 1.0
-        H[1, 1] = 1.0
-        H[2, 2] = 1.0
+    def initialize(self, initial_state_6d):
+        self.x[:6] = initial_state_6d
+        self.x[6:] = 0.0  # Sesgo inicial nulo
+
+    def generate_sigma_points(self):
+        sigma_points = np.zeros((2 * self.n + 1, self.n))
+        sigma_points[0] = self.x
         
-        y = gps_position_measured - H @ self.x
-        S = H @ self.P @ H.T + self.R
-        K = self.P @ H.T @ np.linalg.inv(S)
+        # Raíz cuadrada de la matriz de covarianza (Cholesky)
+        try:
+            L = np.linalg.cholesky((self.n + self.lambda_) * self.P)
+        except np.linalg.LinAlgError:
+            # SVD de respaldo si la matriz pierde definición positiva
+            U, S, Vt = np.linalg.svd(self.P)
+            L = U @ np.diag(np.sqrt(np.maximum(S, 1e-9)))
+            
+        for i in range(self.n):
+            sigma_points[i + 1]          = self.x + L[:, i]
+            sigma_points[i + 1 + self.n] = self.x - L[:, i]
+            
+        return sigma_points
+
+    def predict(self, dt, imu_accel):
+        sigmas = self.generate_sigma_points()
+        sigmas_fwd = np.zeros_like(sigmas)
         
-        self.x = self.x + K @ y
-        self.P = (np.eye(self.n) - K @ H) @ self.P
+        for i in range(2 * self.n + 1):
+            pos = sigmas[i, :3]
+            vel = sigmas[i, 3:6]
+            bias_a = sigmas[i, 6:]
+            
+            # Aceleración corregida por el sesgo estimado
+            a_corr = imu_accel - bias_a
+            
+            pos_next = pos + vel * dt + 0.5 * a_corr * (dt**2)
+            vel_next = vel + a_corr * dt
+            
+            sigmas_fwd[i, :3] = pos_next
+            sigmas_fwd[i, 3:6] = vel_next
+            sigmas_fwd[i, 6:] = bias_a  # Modelo de paseo aleatorio para el sesgo
+            
+        # Reconstruir media y covarianza predicha
+        self.x = np.sum(self.Wm[:, np.newaxis] * sigmas_fwd, axis=0)
+        
+        self.P = np.zeros((self.n, self.n))
+        for i in range(2 * self.n + 1):
+            diff = (sigmas_fwd[i] - self.x)[:, np.newaxis]
+            self.P += self.Wc[i] * (diff @ diff.T)
+        self.P += self.Q
+
+    def update(self, gps_pos_measured):
+        sigmas = self.generate_sigma_points()
+        Z_sigmas = sigmas[:, :3]  # Función de observación h(x) = posición
+        
+        z_mean = np.sum(self.Wm[:, np.newaxis] * Z_sigmas, axis=0)
+        
+        S = np.zeros((3, 3))
+        Pxz = np.zeros((self.n, 3))
+        
+        for i in range(2 * self.n + 1):
+            z_diff = (Z_sigmas[i] - z_mean)[:, np.newaxis]
+            x_diff = (sigmas[i] - self.x)[:, np.newaxis]
+            
+            S += self.Wc[i] * (z_diff @ z_diff.T)
+            Pxz += self.Wc[i] * (x_diff @ z_diff.T)
+            
+        S += self.R
+        
+        # Ganancia de Kalman K
+        K = Pxz @ np.linalg.inv(S)
+        residual = gps_pos_measured - z_mean
+        
+        self.x += K @ residual
+        self.P -= K @ S @ K.T
+        
+        return residual, S

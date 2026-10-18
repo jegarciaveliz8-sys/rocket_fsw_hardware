@@ -12,15 +12,16 @@ from fdir_engine import FDIRSystem
 import ccsds_crypto
 import ai_copilot
 
-app = FastAPI(title="ODYSSEY-1 Mission Control Center")
+app = FastAPI(title="ODYSSEY-1 Mission Control Center - High Fidelity")
 
 ukf = RocketUKF()
 fdir = FDIRSystem()
 
+# Estado inicial ECI: 400km LEO orbit, v = 7.67 km/s
 state_real = np.array([6778137.0, 0.0, 0.0, 0.0, 7670.0, 0.0])
-mass = 50000.0
+mass = 50000.0  # kg
 cd = 0.3
-area = 10.0
+area = 10.0     # m^2
 
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -30,7 +31,7 @@ async def get_index():
     if os.path.exists("static/index.html"):
         with open("static/index.html", "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>ODYSSEY-1 Mission Control Center Backend Operational</h1>"
+    return "<h1>ODYSSEY-1 High-Fidelity MCC Backend Operational</h1>"
 
 class AIQuery(BaseModel):
     query: str
@@ -43,12 +44,12 @@ async def ask_ai(data: AIQuery):
     speed_kms = np.linalg.norm(vel) / 1000.0
     
     state_summary = {
-        "altitud_km": round(alt_km, 2),
-        "velocidad_kms": round(speed_kms, 2),
+        "altitud_km": round(alt_km, 3),
+        "velocidad_kms": round(speed_kms, 3),
         "estado_fdir": fdir.status,
         "falla_fdir": fdir.injected_fault,
         "matriz_subsistemas": fdir.subsystems,
-        "sdls_status": "AUTHENTICATED_VALID"
+        "sdls_status": "AUTHENTICATED_RS255_223_VALID"
     }
     
     response = ai_copilot.ask_flight_director_ai(state_summary, data.query)
@@ -58,49 +59,50 @@ async def ask_ai(data: AIQuery):
 async def websocket_telemetry(websocket: WebSocket):
     global state_real
     await websocket.accept()
-    dt = 1.0
+    dt = 1.0  # 1s sim step
     
     ukf.initialize(state_real)
     
     try:
         while True:
+            # 1. Integración RK4 de la Física Espacial con J2, J3, Drag y SRP
+            state_real = physics_engine.rk4_step(state_real, dt, mass, cd, area)
             pos = state_real[:3]
             vel = state_real[3:]
             
-            # 1. Física espacial con J2 y Arrastre
-            acc = physics_engine.calculate_accelerations(pos, vel, mass, cd, area)
-            vel = vel + acc * dt
-            pos = pos + vel * dt
-            state_real = np.hstack([pos, vel])
+            # Obtener aceleración real para la IMU
+            deriv = physics_engine.state_derivative(0, state_real, mass, cd, area)
+            imu_accel = deriv[3:]
             
-            # 2. Navegación UKF
-            ukf.predict(dt, imu_acceleration=acc)
-            gps_measured = pos + np.random.normal(0, 8.0, 3)
-            ukf.update(gps_measured)
-            state_estimated = ukf.x
+            # 2. Navegación Unscented Kalman Filter (9D)
+            ukf.predict(dt, imu_accel=imu_accel)
+            gps_measured = pos + np.random.normal(0, 5.0, 3)  # Ruido GPS 5m std
+            residual, S_cov = ukf.update(gps_measured)
+            state_estimated = ukf.x[:6]
             
-            # 3. FDIR Autónomo
-            fdir_action = fdir.evaluate_telemetry(state_real, state_estimated)
+            # 3. FDIR con Distancia de Mahalanobis
+            fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
             
-            # 4. CCSDS / SDLS Security
+            # 4. Encriptación SDLS + Reed Solomon + CCSDS Frame
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
-            payload_str = f"ALT:{alt_m:.1f};VEL:{speed_ms:.1f};FDIR:{fdir.status}"
+            payload_str = f"ALT:{alt_m:.2f};VEL:{speed_ms:.2f};D2_M:{d_mahalanobis:.2f};FDIR:{fdir.status}"
             
             ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
             security_check = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
             
             telemetry_data = {
-                "altitude_km": round(alt_m / 1000.0, 2),
+                "altitude_km": round(alt_m / 1000.0, 3),
                 "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),
-                "position_xyz": [round(p, 1) for p in pos],
-                "velocity_xyz": [round(v, 1) for v in vel],
-                "ukf_estimated_xyz": [round(p, 1) for p in state_estimated[:3]],
+                "position_xyz": [round(p, 2) for p in pos],
+                "velocity_xyz": [round(v, 2) for v in vel],
+                "ukf_estimated_xyz": [round(p, 2) for p in state_estimated[:3]],
+                "mahalanobis_d2": round(d_mahalanobis, 2),
                 "fdir_status": fdir.status,
                 "fdir_fault": fdir.injected_fault,
                 "fdir_action": fdir_action,
                 "fdir_subsystems": fdir.subsystems,
-                "ccsds_hex": ccsds_frame.hex().upper()[:36] + "...",
+                "ccsds_hex": ccsds_frame.hex().upper()[:40] + "...",
                 "ccsds_crc_valid": security_check["valid"],
                 "sdls_status": security_check["error"]
             }

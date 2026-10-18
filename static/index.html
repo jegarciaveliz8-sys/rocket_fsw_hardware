@@ -2,15 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | 3D Mission Control Center</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>ODYSSEY-1 | High-Fidelity Cesium 3D MCC</title>
+    <!-- CesiumJS Engine CDN -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.108/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.108/Cesium/Widgets/widgets.css" rel="stylesheet">
     <style>
         body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 15px; }
         header { border-bottom: 2px solid #00ffcc; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 20px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
-        .layout { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+        .layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 15px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #canvas3d { width: 100%; height: 320px; background: #000; border-radius: 4px; }
+        #cesiumContainer { width: 100%; height: 380px; border-radius: 4px; overflow: hidden; }
         .metric { font-size: 16px; font-weight: bold; color: #f3f4f6; margin: 4px 0; }
         textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; }
         button { background: #0284c7; color: #fff; border: none; padding: 8px; margin-top: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -19,38 +21,38 @@
 </head>
 <body>
     <header>
-        <h1>🚀 ODYSSEY-1 | 3D ORBITAL & N-BODY MISSION CONTROL</h1>
-        <div id="status">● TELEMETRY: CONNECTED</div>
+        <h1>🚀 ODYSSEY-1 | CESIUM 3D GLOBAL MISSION CONTROL CENTER</h1>
+        <div id="status">● TELEMETRY LINK: ACTIVE</div>
     </header>
 
     <div class="layout">
         <div class="panel">
-            <h3>🌐 Visualización Orbitador 3D (Tierra & Satélite)</h3>
-            <div id="canvas3d"></div>
+            <h3>🌐 Visualización Geoespacial 3D (CesiumJS World Globe)</h3>
+            <div id="cesiumContainer"></div>
         </div>
 
         <div class="panel">
-            <h3>🛰️ Telemetría & N-Cuerpos SOI</h3>
-            <div>Altitud: <span id="alt" class="metric">-- km</span></div>
-            <div>Velocidad: <span id="vel" class="metric">-- km/h</span></div>
+            <h3>🛰️ Vector de Estado & N-Cuerpos</h3>
+            <div>Altitud Orbital: <span id="alt" class="metric">-- km</span></div>
+            <div>Velocidad Orbital: <span id="vel" class="metric">-- km/h</span></div>
             <div>Esfera Influencia (SOI): <span id="soi" class="metric" style="color: #38bdf8;">--</span></div>
-            <div>Fase FSM: <span id="fsm" class="metric" style="color: #facc15;">--</span></div>
-            <div>Antena DSN: <span id="dsn" style="font-size: 12px;">--</span></div>
-            <div>FDIR $D^2$: <span id="d2" class="metric">0.00</span></div>
+            <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #facc15;">--</span></div>
+            <div>Estación DSN: <span id="dsn" style="font-size: 12px;">--</span></div>
+            <div>Mahalanobis $D^2$: <span id="d2" class="metric">0.00</span></div>
             <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL</span></div>
         </div>
     </div>
 
     <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
         <div class="panel">
-            <h3>🤖 Copiloto IA Gemini</h3>
-            <textarea id="ai-query" rows="2" placeholder="Ej: Analiza la estabilidad orbital en la Esfera de Influencia activa."></textarea>
+            <h3>🤖 Copiloto IA de Vuelo (Gemini RAG)</h3>
+            <textarea id="ai-query" rows="2" placeholder="Ej: Analiza las perturbaciones lunisolares en el sistema N-Cuerpos."></textarea>
             <button onclick="sendAI()">Consultar Copiloto</button>
             <pre id="ai-res">Esperando comandos...</pre>
         </div>
 
         <div class="panel">
-            <h3>📐 Maniobras ($\Delta v$) & TC Uplink</h3>
+            <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
             <input type="number" id="target-alt" value="500" placeholder="Meta km">
             <button onclick="calcBurn()" style="background: #0d9488;">Calcular Maniobra</button>
             <pre id="burn-res">Standby</pre>
@@ -58,36 +60,36 @@
     </div>
 
     <script>
-        // Setup Three.js 3D Earth and Satellite
-        const container = document.getElementById('canvas3d');
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        container.appendChild(renderer.domElement);
+        // Inicialización de CesiumJS con Globe Globe
+        Cesium.Ion.defaultAccessToken = ''; // Token anónimo de renderizado local
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: new Cesium.TileMapServiceImageryProvider({
+                url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+            }),
+            baseLayerPicker: false,
+            geocoder: false,
+            timeline: false,
+            animation: false,
+            sceneModePicker: false,
+            navigationHelpButton: false
+        });
 
-        // Tierra
-        const earthGeo = new THREE.SphereGeometry(2, 32, 32);
-        const earthMat = new THREE.MeshBasicMaterial({ color: 0x1d4ed8, wireframe: true });
-        const earth = new THREE.Mesh(earthGeo, earthMat);
-        scene.add(earth);
+        // Satélite ODYSSEY-1 en Cesium 3D
+        const satelliteEntity = viewer.entities.add({
+            name: 'ODYSSEY-1',
+            position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
+            point: { pixelSize: 10, color: Cesium.Color.CYAN },
+            path: {
+                resolution: 1,
+                material: new Cesium.PolylineGlowMaterialProperty({
+                    glowPower: 0.1,
+                    color: Cesium.Color.YELLOW
+                }),
+                width: 2
+            }
+        });
 
-        // Satélite ODYSSEY-1
-        const satGeo = new THREE.SphereGeometry(0.15, 16, 16);
-        const satMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
-        const satellite = new THREE.Mesh(satGeo, satMat);
-        scene.add(satellite);
-
-        camera.position.z = 6;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            earth.rotation.y += 0.002;
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        // WebSocket Telemetry
+        // WebSocket Telemetry Feed
         const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -99,16 +101,18 @@
             document.getElementById('d2').innerText = data.mahalanobis_d2;
             document.getElementById('hil').innerText = data.hil_mode;
 
-            // Actualizar posición 3D
+            // Actualizar Posición ECI/ECEF en Globe Cesium 3D
             if (data.position_xyz) {
-                const scale = 1 / 2000000.0;
-                satellite.position.set(data.position_xyz[0] * scale, data.position_xyz[1] * scale, data.position_xyz[2] * scale);
+                const x = data.position_xyz[0];
+                const y = data.position_xyz[1];
+                const z = data.position_xyz[2];
+                satelliteEntity.position = new Cesium.ConstantPositionProperty(new Cesium.Cartesian3(x, y, z));
             }
         };
 
         async function sendAI() {
             const q = document.getElementById('ai-query').value;
-            document.getElementById('ai-res').innerText = "Consultando Gemini...";
+            document.getElementById('ai-res').innerText = "Procesando...";
             const res = await fetch('/api/ai/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) });
             const j = await res.json();
             document.getElementById('ai-res').innerText = j.response;

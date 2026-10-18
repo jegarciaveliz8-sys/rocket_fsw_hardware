@@ -66,28 +66,28 @@ async def websocket_telemetry(websocket: WebSocket):
             pos = state_real[:3]
             vel = state_real[3:]
             
-            # 1. Aceleración física
+            # 1. Física espacial
             acc = physics_engine.calculate_accelerations(pos, vel, mass, cd, area)
-            
             vel = vel + acc * dt
             pos = pos + vel * dt
             state_real = np.hstack([pos, vel])
             
-            # 2. Navegación GNSS/INS UKF
+            # 2. UKF Navegación
             ukf.predict(dt, imu_acceleration=acc)
             gps_measured = pos + np.random.normal(0, 8.0, 3)
             ukf.update(gps_measured)
             state_estimated = ukf.x
             
-            # 3. Diagnóstico FDIR autónomo y recuperación
+            # 3. FDIR Autónomo
             fdir_action = fdir.evaluate_telemetry(state_real, state_estimated)
             
-            # 4. Trama binaria CCSDS
+            # 4. Encriptación y Empaquetado CCSDS + SDLS
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
             payload_str = f"ALT:{alt_m:.1f};VEL:{speed_ms:.1f};FDIR:{fdir.status}"
+            
             ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
-            is_valid_crc = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
+            security_check = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
             
             telemetry_data = {
                 "altitude_km": round(alt_m / 1000.0, 2),
@@ -99,8 +99,9 @@ async def websocket_telemetry(websocket: WebSocket):
                 "fdir_fault": fdir.injected_fault,
                 "fdir_action": fdir_action,
                 "fdir_subsystems": fdir.subsystems,
-                "ccsds_hex": ccsds_frame.hex().upper()[:32] + "...",
-                "ccsds_crc_valid": is_valid_crc
+                "ccsds_hex": ccsds_frame.hex().upper()[:36] + "...",
+                "ccsds_crc_valid": security_check["valid"],
+                "sdls_status": security_check["error"]
             }
             
             await websocket.send_json(telemetry_data)

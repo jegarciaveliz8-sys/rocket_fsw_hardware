@@ -46,7 +46,8 @@ async def ask_ai(data: AIQuery):
         "altitud_km": round(alt_km, 2),
         "velocidad_kms": round(speed_kms, 2),
         "estado_fdir": fdir.status,
-        "falla_fdir": fdir.injected_fault
+        "falla_fdir": fdir.injected_fault,
+        "matriz_subsistemas": fdir.subsystems
     }
     
     response = ai_copilot.ask_flight_director_ai(state_summary, data.query)
@@ -58,7 +59,6 @@ async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
     dt = 1.0
     
-    # Inicializar el filtro con el estado inicial
     ukf.initialize(state_real)
     
     try:
@@ -66,24 +66,23 @@ async def websocket_telemetry(websocket: WebSocket):
             pos = state_real[:3]
             vel = state_real[3:]
             
-            # 1. Aceleración física real (Gravedad + J2 + Arrastre)
+            # 1. Aceleración física
             acc = physics_engine.calculate_accelerations(pos, vel, mass, cd, area)
             
-            # Integración de la física real
             vel = vel + acc * dt
             pos = pos + vel * dt
             state_real = np.hstack([pos, vel])
             
-            # 2. Navegación Avanzada GNSS/INS (Predicción IMU + Medición GPS ruidosa)
+            # 2. Navegación GNSS/INS UKF
             ukf.predict(dt, imu_acceleration=acc)
             gps_measured = pos + np.random.normal(0, 8.0, 3)
             ukf.update(gps_measured)
             state_estimated = ukf.x
             
-            # 3. Evaluación FDIR con residuos del filtro de navegación
-            fdir_msg = fdir.evaluate_telemetry(state_real, state_estimated)
+            # 3. Diagnóstico FDIR autónomo y recuperación
+            fdir_action = fdir.evaluate_telemetry(state_real, state_estimated)
             
-            # 4. Trama CCSDS
+            # 4. Trama binaria CCSDS
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
             payload_str = f"ALT:{alt_m:.1f};VEL:{speed_ms:.1f};FDIR:{fdir.status}"
@@ -98,7 +97,8 @@ async def websocket_telemetry(websocket: WebSocket):
                 "ukf_estimated_xyz": [round(p, 1) for p in state_estimated[:3]],
                 "fdir_status": fdir.status,
                 "fdir_fault": fdir.injected_fault,
-                "fdir_action": fdir_msg,
+                "fdir_action": fdir_action,
+                "fdir_subsystems": fdir.subsystems,
                 "ccsds_hex": ccsds_frame.hex().upper()[:32] + "...",
                 "ccsds_crc_valid": is_valid_crc
             }

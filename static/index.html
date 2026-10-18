@@ -2,152 +2,123 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | Industrial Aerospace MCC</title>
+    <title>ODYSSEY-1 | 3D Mission Control Center</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { background-color: #050811; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
-        header { border-bottom: 2px solid #00ffcc; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        h1 { margin: 0; font-size: 22px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-        .card { background: #0d1527; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; }
-        .card h3 { margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 6px; color: #38bdf8; font-size: 14px; }
-        .metric { font-size: 18px; font-weight: bold; color: #f3f4f6; margin: 8px 0; }
-        .nominal { color: #22c55e; }
-        .critical { color: #ef4444; }
-        textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; margin-top: 4px; border-radius: 4px; box-sizing: border-box; }
-        button { background: #0284c7; color: #fff; border: none; padding: 8px 12px; margin-top: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        button:hover { background: #0369a1; }
-        pre { background: #020617; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; color: #34d399; max-height: 120px; margin: 5px 0 0 0; }
+        body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 15px; }
+        header { border-bottom: 2px solid #00ffcc; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 20px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
+        .layout { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+        .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
+        #canvas3d { width: 100%; height: 320px; background: #000; border-radius: 4px; }
+        .metric { font-size: 16px; font-weight: bold; color: #f3f4f6; margin: 4px 0; }
+        textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; }
+        button { background: #0284c7; color: #fff; border: none; padding: 8px; margin-top: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        pre { background: #020617; padding: 6px; font-size: 11px; color: #34d399; max-height: 100px; overflow-y: auto; }
     </style>
 </head>
 <body>
     <header>
-        <h1>🚀 ODYSSEY-1 | INDUSTRIAL AEROSPACE MISSION CONTROL</h1>
-        <div id="connection-status" class="nominal">● TELEMETRY LINK: ONLINE</div>
+        <h1>🚀 ODYSSEY-1 | 3D ORBITAL & N-BODY MISSION CONTROL</h1>
+        <div id="status">● TELEMETRY: CONNECTED</div>
     </header>
 
-    <div class="grid">
-        <div class="card">
-            <h3>🛰️ Cinemática & Secuenciador FSM</h3>
-            <div>Altitud LEO:</div>
-            <div id="alt" class="metric">-- km</div>
-            <div>Fase de Vuelo (FSM):</div>
-            <div id="seq-state" class="metric" style="color: #facc15; font-size: 15px;">--</div>
-            <div>Antena DSN:</div>
-            <div id="dsn" style="font-size: 12px; color: #38bdf8;">--</div>
+    <div class="layout">
+        <div class="panel">
+            <h3>🌐 Visualización Orbitador 3D (Tierra & Satélite)</h3>
+            <div id="canvas3d"></div>
         </div>
 
-        <div class="card">
-            <h3>🚨 FDIR & Mahalanobis ($D^2$)</h3>
-            <div>Estado Sistema:</div>
-            <div id="fdir-status" class="metric nominal">NOMINAL</div>
-            <div>Distancia $D^2$:</div>
-            <div id="mahalanobis" class="metric">0.00</div>
-            <div id="fdir-action" style="font-size: 11px; color: #9ca3af; margin-top: 4px;">Normal</div>
-        </div>
-
-        <div class="card">
-            <h3>🌐 Constelación Multi-Satélite</h3>
-            <div>ODYSSEY-LEO-1:</div>
-            <div id="swarm-1" style="font-size: 12px; color: #e2e8f0;">--</div>
-            <div>ODYSSEY-LEO-2:</div>
-            <div id="swarm-2" style="font-size: 12px; color: #e2e8f0;">--</div>
-            <div>Distancia Relativa:</div>
-            <div id="swarm-dist" style="font-size: 13px; color: #38bdf8;">--</div>
-        </div>
-
-        <div class="card">
-            <h3>🔒 Encriptación CCSDS / HIL</h3>
-            <div>CRC-16 / RS:</div>
-            <div id="crc-status" class="metric nominal">VALIDATED</div>
-            <div>Modo Operativo:</div>
-            <div id="hil-mode" style="font-size: 12px; color: #22c55e;">VIRTUAL</div>
-            <pre id="ccsds-hex">Waiting...</pre>
+        <div class="panel">
+            <h3>🛰️ Telemetría & N-Cuerpos SOI</h3>
+            <div>Altitud: <span id="alt" class="metric">-- km</span></div>
+            <div>Velocidad: <span id="vel" class="metric">-- km/h</span></div>
+            <div>Esfera Influencia (SOI): <span id="soi" class="metric" style="color: #38bdf8;">--</span></div>
+            <div>Fase FSM: <span id="fsm" class="metric" style="color: #facc15;">--</span></div>
+            <div>Antena DSN: <span id="dsn" style="font-size: 12px;">--</span></div>
+            <div>FDIR $D^2$: <span id="d2" class="metric">0.00</span></div>
+            <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL</span></div>
         </div>
     </div>
 
-    <div class="grid" style="margin-top: 15px; grid-template-columns: 2fr 1fr 1fr;">
-        <div class="card">
-            <h3>🤖 Copiloto IA de Vuelo (Gemini RAG)</h3>
-            <textarea id="ai-query" rows="2" placeholder="Ej: Analiza el estado del secuenciador FSM y la distancia relativa de la constelación."></textarea>
-            <button onclick="sendAIQuery()">Enviar Consulta de Ingeniería</button>
-            <pre id="ai-response">Esperando comandos...</pre>
+    <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
+        <div class="panel">
+            <h3>🤖 Copiloto IA Gemini</h3>
+            <textarea id="ai-query" rows="2" placeholder="Ej: Analiza la estabilidad orbital en la Esfera de Influencia activa."></textarea>
+            <button onclick="sendAI()">Consultar Copiloto</button>
+            <pre id="ai-res">Esperando comandos...</pre>
         </div>
 
-        <div class="card">
-            <h3>📐 Planificador Orbital ($\Delta v$)</h3>
-            <input type="number" id="target-alt" value="450" placeholder="Altitud Meta (km)">
-            <button onclick="calculateBurn()" style="background: #0d9488;">Calcular Maniobra Hohmann</button>
-            <pre id="burn-response">Standby</pre>
-        </div>
-
-        <div class="card">
-            <h3>⚡ Telecomandos (TC Uplink)</h3>
-            <input type="text" id="tc-command" value="ORBIT_CORRECTION_BURN_01">
-            <button onclick="sendTelecommand()" style="background: #7c3aed;">Transmitir Comando</button>
-            <pre id="tc-response">CLCW: Standby</pre>
+        <div class="panel">
+            <h3>📐 Maniobras ($\Delta v$) & TC Uplink</h3>
+            <input type="number" id="target-alt" value="500" placeholder="Meta km">
+            <button onclick="calcBurn()" style="background: #0d9488;">Calcular Maniobra</button>
+            <pre id="burn-res">Standby</pre>
         </div>
     </div>
 
     <script>
-        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        // Setup Three.js 3D Earth and Satellite
+        const container = document.getElementById('canvas3d');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
 
+        // Tierra
+        const earthGeo = new THREE.SphereGeometry(2, 32, 32);
+        const earthMat = new THREE.MeshBasicMaterial({ color: 0x1d4ed8, wireframe: true });
+        const earth = new THREE.Mesh(earthGeo, earthMat);
+        scene.add(earth);
+
+        // Satélite ODYSSEY-1
+        const satGeo = new THREE.SphereGeometry(0.15, 16, 16);
+        const satMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+        const satellite = new THREE.Mesh(satGeo, satMat);
+        scene.add(satellite);
+
+        camera.position.z = 6;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            earth.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // WebSocket Telemetry
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            
             document.getElementById('alt').innerText = data.altitude_km + " km";
-            document.getElementById('seq-state').innerText = data.sequencer_state;
-            document.getElementById('dsn').innerText = data.dsn_station + " (" + data.dsn_elevation + "°)";
-            
-            const fdirElem = document.getElementById('fdir-status');
-            fdirElem.innerText = data.fdir_status;
-            fdirElem.className = "metric " + (data.fdir_status === "NOMINAL" ? "nominal" : "critical");
-            
-            document.getElementById('mahalanobis').innerText = data.mahalanobis_d2;
-            document.getElementById('fdir-action').innerText = data.fdir_action;
-            
-            if (data.swarm_fleet && data.swarm_fleet["ODYSSEY-LEO-1"]) {
-                document.getElementById('swarm-1').innerText = "Alt: " + data.swarm_fleet["ODYSSEY-LEO-1"].altitude_km + " km";
-                document.getElementById('swarm-2').innerText = "Alt: " + data.swarm_fleet["ODYSSEY-LEO-2"].altitude_km + " km";
-                document.getElementById('swarm-dist').innerText = data.swarm_fleet["CONSTELLATION_METRICS"].relative_distance_m + " m";
+            document.getElementById('vel').innerText = data.speed_kmh + " km/h";
+            document.getElementById('soi').innerText = data.active_soi;
+            document.getElementById('fsm').innerText = data.sequencer_state;
+            document.getElementById('dsn').innerText = data.dsn_station;
+            document.getElementById('d2').innerText = data.mahalanobis_d2;
+            document.getElementById('hil').innerText = data.hil_mode;
+
+            // Actualizar posición 3D
+            if (data.position_xyz) {
+                const scale = 1 / 2000000.0;
+                satellite.position.set(data.position_xyz[0] * scale, data.position_xyz[1] * scale, data.position_xyz[2] * scale);
             }
-            
-            document.getElementById('hil-mode').innerText = data.hil_mode;
-            document.getElementById('crc-status').innerText = data.ccsds_crc_valid ? "VALIDATED" : "CORRUPTED";
-            document.getElementById('ccsds-hex').innerText = data.ccsds_hex;
         };
 
-        async function sendAIQuery() {
-            const query = document.getElementById('ai-query').value;
-            document.getElementById('ai-response').innerText = "Procesando con Gemini AI...";
-            const res = await fetch('/api/ai/ask', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({query: query})
-            });
-            const json = await res.json();
-            document.getElementById('ai-response').innerText = json.response;
+        async function sendAI() {
+            const q = document.getElementById('ai-query').value;
+            document.getElementById('ai-res').innerText = "Consultando Gemini...";
+            const res = await fetch('/api/ai/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) });
+            const j = await res.json();
+            document.getElementById('ai-res').innerText = j.response;
         }
 
-        async function calculateBurn() {
-            const targetAlt = parseFloat(document.getElementById('target-alt').value);
-            const res = await fetch('/api/orbit/plan', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({target_altitude_km: targetAlt})
-            });
-            const json = await res.json();
-            document.getElementById('burn-response').innerText = JSON.stringify(json, null, 2);
-        }
-
-        async function sendTelecommand() {
-            const cmd = document.getElementById('tc-command').value;
-            const res = await fetch('/api/tc/uplink', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({command: cmd})
-            });
-            const json = await res.json();
-            document.getElementById('tc-response').innerText = JSON.stringify(json, null, 2);
+        async function calcBurn() {
+            const alt = parseFloat(document.getElementById('target-alt').value);
+            const res = await fetch('/api/orbit/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({target_altitude_km: alt}) });
+            const j = await res.json();
+            document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
         }
     </script>
 </body>

@@ -17,8 +17,9 @@ from flight_sequencer import FlightSequencer
 from orbit_planner import calculate_optimal_burn, cartesian_to_keplerian
 from swarm_manager import SwarmConstellationManager
 from hil_mqtt_bridge import HardwareInTheLoopBridge
+from nbody_physics import nbody_gravitational_acceleration
 
-app = FastAPI(title="ODYSSEY-1 Industrial Grade Mission Control Center")
+app = FastAPI(title="ODYSSEY-1 Full MCC Aerospace Center")
 
 ukf = RocketUKF()
 fdir = FDIRSystem()
@@ -40,7 +41,7 @@ async def get_index():
     if os.path.exists("static/index.html"):
         with open("static/index.html", "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>ODYSSEY-1 Industrial MCC Backend Operational</h1>"
+    return "<h1>ODYSSEY-1 Full MCC Backend Operational</h1>"
 
 class AIQuery(BaseModel):
     query: str
@@ -106,7 +107,11 @@ async def websocket_telemetry(websocket: WebSocket):
         while True:
             sim_time_sec += 1
             
-            # Verificar si hay HIL activo o simulación numérica pura
+            # Verificación de aceleración N-Cuerpos
+            pos = state_real[:3]
+            vel = state_real[3:]
+            nbody_acc, active_soi = nbody_gravitational_acceleration(pos, sim_time_sec)
+            
             hil_packet, hil_mode = hil.get_calibrated_acceleration()
             if hil_mode == "HIL_HARDWARE_CONNECTED":
                 acc = np.array([hil_packet["ax"], hil_packet["ay"], hil_packet["az"]])
@@ -123,18 +128,13 @@ async def websocket_telemetry(websocket: WebSocket):
             ukf.predict(dt, imu_accel=acc)
             gps_measured = pos + np.random.normal(0, 5.0, 3)
             residual, S_cov = ukf.update(gps_measured)
-            state_estimated = ukf.x[:6]
             
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
             dyn_pressure = 0.5 * 1.225 * (speed_ms**2)
             
-            # Secuenciador FSM
             seq_state, met = sequencer.evaluate_fsm(alt_m, speed_ms, dyn_pressure, fdir.status)
-            
-            # Constelación Multi-Satélite
             swarm_data = swarm.propagate_swarm_fleet(dt)
-            
             dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
             fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
             
@@ -145,20 +145,19 @@ async def websocket_telemetry(websocket: WebSocket):
             telemetry_data = {
                 "altitude_km": round(alt_m / 1000.0, 3),
                 "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),
+                "position_xyz": [round(float(p), 1) for p in pos],
+                "active_soi": active_soi,
                 "sequencer_state": seq_state,
                 "mission_elapsed_time": met,
-                "staging": sequencer.staging_status,
                 "swarm_fleet": swarm_data,
                 "hil_mode": hil_mode,
                 "dsn_station": dsn_station,
                 "dsn_elevation": dsn_elevation,
                 "mahalanobis_d2": round(d_mahalanobis, 2),
                 "fdir_status": fdir.status,
-                "fdir_fault": fdir.injected_fault,
                 "fdir_action": fdir_action,
                 "ccsds_hex": ccsds_frame.hex().upper()[:40] + "...",
-                "ccsds_crc_valid": security_check["valid"],
-                "sdls_status": security_check["error"]
+                "ccsds_crc_valid": security_check["valid"]
             }
             
             await websocket.send_json(telemetry_data)

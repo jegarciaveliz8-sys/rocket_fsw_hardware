@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  mcc-backend:
+    build: .
+    container_name: odyssey_mcc_server
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - REDIS_URL=redis://redis_cache:6379
+      - MQTT_BROKER=mosquitto_broker
+    depends_on:
+      - redis_cache
+      - mosquitto_broker
+    restart: always
+
+  mosquitto_broker:
+    image: eclipse-mosquitto:latest
+    container_name: odyssey_mqtt_broker
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    restart: always
+
+  redis_cache:
+    image: redis:alpine
+    container_name: odyssey_redis
+    ports:
+      - "6379:6379"
+    restart: always

@@ -1,8 +1,8 @@
 fastapi
 uvicorn
-websockets
-pyserial
-databases[postgresql]
-asyncpg
+numpy
+crccheck
 google-genai
+paho-mqtt
+redis
 pydantic

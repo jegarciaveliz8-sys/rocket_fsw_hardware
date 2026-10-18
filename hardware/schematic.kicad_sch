@@ -1,0 +1,41 @@
+(kicad_sch (version 20211014) (generator eeschema)
+
+  (paper "A4")
+
+  (title_block
+    (title "Rocket Flight Computer - Avionics v2.0")
+    (company "GNC Aerospace Systems")
+  )
+
+  (symbol_standalone
+    (lib_id "Teensy_41")
+    (at 100 100 0)
+    (property "Reference" "U1" (id 0) (at 100 80 0))
+    (property "Value" "Teensy_4.1" (id 1) (at 100 82 0))
+  )
+
+  (symbol_standalone
+    (lib_id "MPU-6050")
+    (at 160 80 0)
+    (property "Reference" "U2" (id 0) (at 160 65 0))
+    (property "Value" "MPU6050_IMU" (id 1) (at 160 67 0))
+  )
+
+  (symbol_standalone
+    (lib_id "BMP280")
+    (at 160 120 0)
+    (property "Reference" "U3" (id 0) (at 160 105 0))
+    (property "Value" "BMP280_Barometer" (id 1) (at 160 107 0))
+  )
+
+  (symbol_standalone
+    (lib_id "IRLZ44N")
+    (at 210 100 0)
+    (property "Reference" "Q1" (id 0) (at 210 88 0))
+    (property "Value" "MOSFET_Pyro_Trigger" (id 1) (at 210 90 0))
+  )
+
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+)

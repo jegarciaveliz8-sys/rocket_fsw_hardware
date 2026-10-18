@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | NASA / ESA Spaceflight Control Center</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Leaflet GIS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0b0f19; color: #f3f4f6; margin: 0; padding: 20px; }
+        h1 { color: #38bdf8; text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        .container { max-width: 1500px; margin: auto; }
+        .card { background: #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .metric-value { font-size: 22px; font-weight: bold; color: #34d399; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin: 3px; font-size: 13px; }
+        button:hover { background: #0369a1; }
+        button.danger { background: #dc2626; }
+        button.danger:hover { background: #b91c1c; }
+        button.warning { background: #d97706; }
+        button.warning:hover { background: #b45309; }
+        button.success { background: #16a34a; }
+        button.success:hover { background: #15803d; }
+        textarea, input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #475569; background: #0f172a; color: white; margin-top: 10px; box-sizing: border-box; }
+        pre { background: #0f172a; padding: 12px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 12px; }
+        .chart-container, .viewer-container, .map-container { position: relative; height: 260px; width: 100%; margin-top: 10px; border-radius: 6px; overflow: hidden; background: #020617; }
+        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 12px; border-radius: 6px; height: 130px; overflow-y: auto; font-size: 12px; border: 1px solid #334155; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS</div>
+
+        <div class="card" style="text-align: center;">
+            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span></p>
+            <div>
+                <button onclick="sendCommand('LAUNCH')">🚀 LANZAMIENTO ORBITAL</button>
+                <button class="warning" onclick="sendCommand('INJECT_TVC_FAULT')">⚠️ Inyectar Falla TVC</button>
+                <button class="warning" onclick="sendCommand('INJECT_LOX_LEAK')">⚠️ Inyectar Fuga LOX</button>
+                <button class="danger" onclick="sendCommand('ABORT')">🛑 ABORT / FTS</button>
+                <button onclick="sendCommand('RESET')">🔄 NUEVA MISIÓN</button>
+                <button class="success" onclick="downloadPDF()">📄 Reporte PDF NASA</button>
+            </div>
+        </div>
+
+        <!-- Módulo DVR: Reproductor de Vuelos Históricos -->
+        <div class="card" style="border: 1px solid #38bdf8;">
+            <h3>📼 DVR Replay System</h3>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="mission-select" style="margin-top: 0; flex: 2;">
+                    <option value="">Cargando misiones...</option>
+                </select>
+                <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducir Replay</button>
+                <button onclick="stopReplay()" style="flex: 1; margin-top: 0; background: #475569;">⏹ En Vivo</button>
+            </div>
+        </div>
+
+        <div class="grid-4">
+            <div class="card">
+                <h3>Altitud EKF / LEO</h3>
+                <div id="metric-alt" class="metric-value">0.0 km</div>
+            </div>
+            <div class="card">
+                <h3>Velocidad Orbital</h3>
+                <div id="metric-vel" class="metric-value">0.0 km/h</div>
+            </div>
+            <div class="card">
+                <h3>Estación DSN Activa</h3>
+                <div id="metric-dsn" style="color: #38bdf8; font-size: 18px; font-weight: bold;">Cape Canaveral</div>
+            </div>
+            <div class="card">
+                <h3>Blackout Atmosférico</h3>
+                <div id="metric-blackout" style="color: #34d399; font-size: 18px; font-weight: bold;">NOMINAL (LINK OK)</div>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <!-- Órbitas Keplerianas -->
+            <div class="card">
+                <h3>🛰️ Elementos Orbitales Keplerianos</h3>
+                <p>Semi-eje mayor ($a$): <span id="orbit-a" style="color: #38bdf8; font-weight: bold;">6371.0 km</span></p>
+                <p>Excentricidad ($e$): <span id="orbit-e" style="color: #facc15; font-weight: bold;">0.0000</span></p>
+                <p>Inclinación ($i$): <span id="orbit-i" style="color: #34d399; font-weight: bold;">28.5°</span></p>
+            </div>
+            <!-- Matrix FDIR -->
+            <div class="card">
+                <h3>🚨 Matriz FDIR (Fault Detection & Recovery)</h3>
+                <p>Falla Inyectada: <span id="fdir-fault" style="color: #f87171; font-weight: bold;">NONE</span></p>
+                <p>Acción Autónoma: <span id="fdir-action" style="color: #34d399; font-weight: bold;">NOMINAL</span></p>
+            </div>
+            <!-- CCSDS Frame -->
+            <div class="card">
+                <h3>🎛️ Trama Binaria CCSDS (STD 133.0-B-2)</h3>
+                <p>APID: <span style="color: #38bdf8; font-weight: bold;">0x01A</span> | CRC-16: <span style="color: #34d399; font-weight: bold;">VALID</span></p>
+                <pre id="ccsds-hex">081AC0000018...</pre>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- Three.js 3D -->
+            <div class="card">
+                <h3>🌌 Actitud 3D en Tiempo Real (Pitch, Yaw, Roll)</h3>
+                <div id="three-container" class="viewer-container"></div>
+            </div>
+            <!-- Leaflet GIS -->
+            <div class="card">
+                <h3>🗺️ Ground Track GIS & Cobertura DSN</h3>
+                <div id="map" class="map-container"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📊 Gráfica de Telemetría (Altitud y Velocidad)</h3>
+            <div class="chart-container">
+                <canvas id="telemetryChart"></canvas>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h3>📜 Registro MCC Log</h3>
+                <div id="mcc-console" class="console-log">[T+0s] Sistema de Control de Misión NASA inicializado...</div>
+            </div>
+            <div class="card">
+                <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI</h3>
+                <textarea id="ai-prompt" rows="2" placeholder="Pregunta sobre la órbita, FDIR o tramas CCSDS..."></textarea>
+                <button onclick="queryAI()">🤖 Consultar IA</button>
+                <pre id="ai-response" style="height: 50px; overflow-y: auto;">Esperando consulta de ingeniería...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let replayActive = false;
+        let replayInterval = null;
+        let selectedMissionForPDF = 1;
+
+        // --- Three.js ---
+        const container3D = document.getElementById('three-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, container3D.clientWidth / container3D.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container3D.clientWidth, container3D.clientHeight);
+        container3D.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1);
+        pointLight.position.set(10, 20, 10);
+        scene.add(pointLight);
+
+        const rocketGroup = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 });
+        const noseMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2 });
+        const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 3, 16);
+        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        rocketGroup.add(bodyMesh);
+
+        const noseGeo = new THREE.ConeGeometry(0.4, 1.2, 16);
+        const noseMesh = new THREE.Mesh(noseGeo, noseMat);
+        noseMesh.position.y = 2.1;
+        rocketGroup.add(noseMesh);
+
+        scene.add(rocketGroup);
+        camera.position.set(0, 0, 7);
+
+        // --- Leaflet GIS ---
+        const map = L.map('map').setView([28.5721, -80.6480], 3);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+        const rocketMarker = L.marker([28.5721, -80.6480]).addTo(map);
+        const trajectoryLine = L.polyline([], { color: '#38bdf8', weight: 3 }).addTo(map);
+
+        // Estaciones DSN en el mapa
+        const dsnStations = {
+            "Cape Canaveral": [28.5721, -80.6480],
+            "Madrid DSN": [40.4262, -4.2497],
+            "Goldstone DSN": [35.4266, -116.8900],
+            "Canberra DSN": [-35.4014, 148.9817]
+        };
+        for (let name in dsnStations) {
+            L.circle(dsnStations[name], { radius: 800000, color: '#34d399', fillColor: '#34d399', fillOpacity: 0.1 }).addTo(map).bindPopup(name);
+        }
+
+        // --- Chart.js ---
+        const ctx = document.getElementById('telemetryChart').getContext('2d');
+        const telemetryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Altitud (km)', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', fill: true },
+                    { label: 'Velocidad (km/h)', data: [], borderColor: '#38bdf8', fill: false }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+
+        function logEvent(msg, type = "INFO") {
+            const consoleEl = document.getElementById("mcc-console");
+            const timeStr = new Date().toLocaleTimeString();
+            const color = type === "WARN" ? "#facc15" : (type === "ERROR" ? "#f87171" : "#34d399");
+            consoleEl.innerHTML += `<br><span style="color:${color}">[${timeStr}] [${type}]</span> ${msg}`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        async function loadMissionList() {
+            try {
+                const res = await fetch("/api/missions");
+                const data = await res.json();
+                const select = document.getElementById("mission-select");
+                const currentVal = select.value;
+                select.innerHTML = "";
+                if (data.missions && data.missions.length > 0) {
+                    data.missions.forEach(id => {
+                        const opt = document.createElement("option");
+                        opt.value = id;
+                        opt.innerText = `Misión Histórica #${id}`;
+                        select.appendChild(opt);
+                    });
+                    if (currentVal) select.value = currentVal;
+                    selectedMissionForPDF = select.value || data.missions[data.missions.length - 1];
+                } else {
+                    select.innerHTML = `<option value="">No hay misiones grabadas</option>`;
+                }
+            } catch (e) {
+                console.error("Error cargando misiones:", e);
+            }
+        }
+
+        function connectWS() {
+            if (replayActive) return;
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            ws = new WebSocket(wsProtocol + window.location.host + "/ws/telemetry");
+
+            ws.onopen = function() {
+                document.getElementById("ws-status").innerText = "CONNECTED (LIVE)";
+                document.getElementById("ws-status").style.color = "#34d399";
+                logEvent("Enlace CCSDS en vivo establecido con MCC.", "INFO");
+            };
+
+            ws.onmessage = function(event) {
+                if (replayActive) return;
+                const data = JSON.parse(event.data);
+                selectedMissionForPDF = data.mission_id;
+
+                document.getElementById("metric-alt").innerText = data.altitude + " km";
+                document.getElementById("metric-vel").innerText = data.velocity + " km/h";
+                document.getElementById("metric-dsn").innerText = data.dsn_station;
+                
+                const blackoutEl = document.getElementById("metric-blackout");
+                blackoutEl.innerText = data.blackout_status;
+                blackoutEl.style.color = data.blackout_status.includes("BLACKOUT") ? "#f87171" : "#34d399";
+
+                document.getElementById("orbit-a").innerText = data.orbit_a + " km";
+                document.getElementById("orbit-e").innerText = data.orbit_e;
+                document.getElementById("orbit-i").innerText = data.orbit_i + "°";
+
+                document.getElementById("fdir-fault").innerText = data.injected_fault;
+                document.getElementById("fdir-action").innerText = data.fdir_action;
+                document.getElementById("ccsds-hex").innerText = data.ccsds_frame;
+
+                // Rotación 3D
+                rocketGroup.rotation.x = THREE.MathUtils.degToRad(data.roll || 0);
+                rocketGroup.rotation.y = THREE.MathUtils.degToRad(data.yaw || 0);
+                rocketGroup.rotation.z = THREE.MathUtils.degToRad(-data.pitch + 90);
+
+                // Leaflet Map
+                const newLatLng = [data.lat, data.lon];
+                rocketMarker.setLatLng(newLatLng);
+                trajectoryLine.addLatLng(newLatLng);
+
+                if (telemetryChart.data.labels.length > 30) {
+                    telemetryChart.data.labels.shift();
+                    telemetryChart.data.datasets[0].data.shift();
+                    telemetryChart.data.datasets[1].data.shift();
+                }
+                telemetryChart.data.labels.push("T+" + data.time + "s");
+                telemetryChart.data.datasets[0].data.push(data.altitude);
+                telemetryChart.data.datasets[1].data.push(data.velocity);
+                telemetryChart.update();
+
+                if (data.time % 5 === 0) {
+                    loadMissionList();
+                }
+            };
+
+            ws.onclose = function() {
+                if (!replayActive) {
+                    document.getElementById("ws-status").innerText = "DISCONNECTED";
+                    document.getElementById("ws-status").style.color = "#f87171";
+                    setTimeout(connectWS, 3000);
+                }
+            };
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            renderer.render(scene, camera);
+        }
+        animate3D();
+
+        function sendCommand(cmd) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ command: cmd }));
+                logEvent(`Comando MCC enviado: ${cmd}`, "INFO");
+            }
+        }
+
+        async function queryAI() {
+            const prompt = document.getElementById("ai-prompt").value;
+            if (!prompt) return;
+            document.getElementById("ai-response").innerText = "Consultando a Gemini...";
+            try {
+                const res = await fetch("/ai/query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+                const data = await res.json();
+                document.getElementById("ai-response").innerText = data.response || data.error;
+            } catch (e) {
+                document.getElementById("ai-response").innerText = "Error de conexión con la IA.";
+            }
+        }
+
+        function downloadPDF() {
+            const missionId = document.getElementById("mission-select").value || selectedMissionForPDF || 1;
+            window.location.href = `/export/pdf/${missionId}`;
+        }
+
+        connectWS();
+        loadMissionList();
+    </script>
+</body>
+</html>

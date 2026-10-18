@@ -13,17 +13,23 @@ import ccsds_crypto
 import ai_copilot
 import tc_command_engine
 import dsn_network
+from flight_sequencer import FlightSequencer
+from orbit_planner import calculate_optimal_burn, cartesian_to_keplerian
+from swarm_manager import SwarmConstellationManager
+from hil_mqtt_bridge import HardwareInTheLoopBridge
 
-app = FastAPI(title="ODYSSEY-1 Mission Control Center - Full MCC System")
+app = FastAPI(title="ODYSSEY-1 Industrial Grade Mission Control Center")
 
 ukf = RocketUKF()
 fdir = FDIRSystem()
+sequencer = FlightSequencer()
+swarm = SwarmConstellationManager()
+hil = HardwareInTheLoopBridge()
 
-# Estado inicial ECI: 400km LEO orbit, v = 7.67 km/s
 state_real = np.array([6778137.0, 0.0, 0.0, 0.0, 7670.0, 0.0])
-mass = 50000.0  # kg
+mass = 50000.0
 cd = 0.3
-area = 10.0     # m^2
+area = 10.0
 sim_time_sec = 0
 
 if os.path.exists("static"):
@@ -34,7 +40,7 @@ async def get_index():
     if os.path.exists("static/index.html"):
         with open("static/index.html", "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>ODYSSEY-1 Advanced MCC Backend Operational</h1>"
+    return "<h1>ODYSSEY-1 Industrial MCC Backend Operational</h1>"
 
 class AIQuery(BaseModel):
     query: str
@@ -42,13 +48,18 @@ class AIQuery(BaseModel):
 class TCCommand(BaseModel):
     command: str
 
+class BurnPlanRequest(BaseModel):
+    target_altitude_km: float
+
+class HILPayload(BaseModel):
+    payload_json: str
+
 @app.post("/api/ai/ask")
 async def ask_ai(data: AIQuery):
     pos = state_real[:3]
     vel = state_real[3:]
     alt_km = (np.linalg.norm(pos) - 6378137.0) / 1000.0
     speed_kms = np.linalg.norm(vel) / 1000.0
-    
     active_dsn, dsn_elev = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
     
     state_summary = {
@@ -61,75 +72,90 @@ async def ask_ai(data: AIQuery):
         "matriz_subsistemas": fdir.subsystems,
         "sdls_status": "AUTHENTICATED_RS255_223_VALID"
     }
-    
-    response = ai_copilot.ask_flight_director_ai(state_summary, data.query)
-    return {"response": response}
+    return {"response": ai_copilot.ask_flight_director_ai(state_summary, data.query)}
 
 @app.post("/api/tc/uplink")
 async def uplink_telecommand(data: TCCommand):
-    # Generar HMAC simulación
     import hmac, hashlib
     payload = data.command.encode('utf-8')
     mac = hmac.new(tc_command_engine.TC_KEY, payload, hashlib.sha256).digest()
     tc_hex = (payload + mac).hex()
-    
-    result = tc_command_engine.authenticate_and_parse_tc(tc_hex)
-    return result
+    return tc_command_engine.authenticate_and_parse_tc(tc_hex)
+
+@app.post("/api/orbit/plan")
+async def plan_orbit(data: BurnPlanRequest):
+    pos = state_real[:3]
+    vel = state_real[3:]
+    plan = calculate_optimal_burn(pos, vel, data.target_altitude_km)
+    kepler = cartesian_to_keplerian(pos, vel)
+    return {"burn_plan": plan, "keplerian_elements": kepler}
+
+@app.post("/api/hil/ingest")
+async def ingest_hil(data: HILPayload):
+    success = hil.process_incoming_hardware_stream(data.payload_json)
+    return {"status": "SUCCESS" if success else "FAILED_PARSING"}
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
     global state_real, sim_time_sec
     await websocket.accept()
-    dt = 1.0  # 1s sim step
-    
+    dt = 1.0
     ukf.initialize(state_real)
     
     try:
         while True:
             sim_time_sec += 1
             
-            # 1. Integración RK4 de la Física Espacial con J2, J3, Drag y SRP
-            state_real = physics_engine.rk4_step(state_real, dt, mass, cd, area)
-            pos = state_real[:3]
-            vel = state_real[3:]
+            # Verificar si hay HIL activo o simulación numérica pura
+            hil_packet, hil_mode = hil.get_calibrated_acceleration()
+            if hil_mode == "HIL_HARDWARE_CONNECTED":
+                acc = np.array([hil_packet["ax"], hil_packet["ay"], hil_packet["az"]])
+                vel = vel + acc * dt
+                pos = pos + vel * dt
+                state_real = np.hstack([pos, vel])
+            else:
+                state_real = physics_engine.rk4_step(state_real, dt, mass, cd, area)
+                pos = state_real[:3]
+                vel = state_real[3:]
+                deriv = physics_engine.state_derivative(0, state_real, mass, cd, area)
+                acc = deriv[3:]
             
-            # Aceleración real para IMU
-            deriv = physics_engine.state_derivative(0, state_real, mass, cd, area)
-            imu_accel = deriv[3:]
-            
-            # 2. Navegación Unscented Kalman Filter (9D)
-            ukf.predict(dt, imu_accel=imu_accel)
+            ukf.predict(dt, imu_accel=acc)
             gps_measured = pos + np.random.normal(0, 5.0, 3)
             residual, S_cov = ukf.update(gps_measured)
             state_estimated = ukf.x[:6]
             
-            # 3. DSN Station Tracking
-            dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
-            
-            # 4. FDIR con Distancia de Mahalanobis
-            fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
-            
-            # 5. Encriptación SDLS + Reed Solomon + CCSDS Frame
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
-            payload_str = f"ALT:{alt_m:.2f};VEL:{speed_ms:.2f};D2_M:{d_mahalanobis:.2f};FDIR:{fdir.status}"
+            dyn_pressure = 0.5 * 1.225 * (speed_ms**2)
             
+            # Secuenciador FSM
+            seq_state, met = sequencer.evaluate_fsm(alt_m, speed_ms, dyn_pressure, fdir.status)
+            
+            # Constelación Multi-Satélite
+            swarm_data = swarm.propagate_swarm_fleet(dt)
+            
+            dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
+            fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
+            
+            payload_str = f"ALT:{alt_m:.2f};VEL:{speed_ms:.2f};D2_M:{d_mahalanobis:.2f};FDIR:{fdir.status};SEQ:{seq_state}"
             ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
             security_check = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
             
             telemetry_data = {
                 "altitude_km": round(alt_m / 1000.0, 3),
                 "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),
-                "position_xyz": [round(p, 2) for p in pos],
-                "velocity_xyz": [round(v, 2) for v in vel],
-                "ukf_estimated_xyz": [round(p, 2) for p in state_estimated[:3]],
+                "sequencer_state": seq_state,
+                "mission_elapsed_time": met,
+                "staging": sequencer.staging_status,
+                "swarm_fleet": swarm_data,
+                "hil_mode": hil_mode,
                 "dsn_station": dsn_station,
                 "dsn_elevation": dsn_elevation,
                 "mahalanobis_d2": round(d_mahalanobis, 2),
                 "fdir_status": fdir.status,
                 "fdir_fault": fdir.injected_fault,
                 "fdir_action": fdir_action,
-                "fdir_subsystems": fdir.subsystems,
                 "ccsds_hex": ccsds_frame.hex().upper()[:40] + "...",
                 "ccsds_crc_valid": security_check["valid"],
                 "sdls_status": security_check["error"]

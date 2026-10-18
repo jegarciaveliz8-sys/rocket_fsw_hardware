@@ -1,7 +1,7 @@
 import os
 import asyncio
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -14,18 +14,14 @@ import ai_copilot
 
 app = FastAPI(title="ODYSSEY-1 Mission Control Center")
 
-# Instancias globales
 ukf = RocketUKF()
 fdir = FDIRSystem()
 
-# Estado inicial del cohete [x, y, z, vx, vy, vz]
-# x = R_earth + 400km (Órbita LEO), vy = ~7.67 km/s
 state_real = np.array([6778137.0, 0.0, 0.0, 0.0, 7670.0, 0.0])
-mass = 50000.0  # kg
+mass = 50000.0
 cd = 0.3
-area = 10.0     # m^2
+area = 10.0
 
-# Servir archivos estáticos si existen
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -60,42 +56,40 @@ async def ask_ai(data: AIQuery):
 async def websocket_telemetry(websocket: WebSocket):
     global state_real
     await websocket.accept()
-    dt = 1.0  # Paso de tiempo de simulación (1s)
+    dt = 1.0
+    
+    # Inicializar el filtro con el estado inicial
+    ukf.initialize(state_real)
     
     try:
         while True:
             pos = state_real[:3]
             vel = state_real[3:]
             
-            # 1. Calcular aceleraciones físicas reales (Gravedad + J2 + Arrastre)
+            # 1. Aceleración física real (Gravedad + J2 + Arrastre)
             acc = physics_engine.calculate_accelerations(pos, vel, mass, cd, area)
             
-            # Integración numérica de Euler para posición y velocidad
+            # Integración de la física real
             vel = vel + acc * dt
             pos = pos + vel * dt
             state_real = np.hstack([pos, vel])
             
-            # 2. Estimación de navegación UKF
-            ukf.predict(dt)
-            # Simular medición de posición con un pequeño ruido
-            z_measured = pos + np.random.normal(0, 5.0, 3)
-            ukf.update(z_measured)
+            # 2. Navegación Avanzada GNSS/INS (Predicción IMU + Medición GPS ruidosa)
+            ukf.predict(dt, imu_acceleration=acc)
+            gps_measured = pos + np.random.normal(0, 8.0, 3)
+            ukf.update(gps_measured)
             state_estimated = ukf.x
             
-            # 3. Evaluación FDIR (Residuos entre real y modelo/estimación)
+            # 3. Evaluación FDIR con residuos del filtro de navegación
             fdir_msg = fdir.evaluate_telemetry(state_real, state_estimated)
             
-            # 4. Construcción de trama binaria CCSDS
+            # 4. Trama CCSDS
             alt_m = np.linalg.norm(pos) - 6378137.0
             speed_ms = np.linalg.norm(vel)
-            
             payload_str = f"ALT:{alt_m:.1f};VEL:{speed_ms:.1f};FDIR:{fdir.status}"
-            payload_bytes = payload_str.encode('utf-8')
-            
-            ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_bytes)
+            ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
             is_valid_crc = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
             
-            # 5. Enviar paquete JSON al cliente Web
             telemetry_data = {
                 "altitude_km": round(alt_m / 1000.0, 2),
                 "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),

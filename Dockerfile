@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . /app
 
-RUN pip install --no-cache-dir fastapi uvicorn databases sqlalchemy reportlab crccheck google-genai pyserial numpy
+RUN pip install --no-cache-dir fastapi uvicorn databases sqlalchemy reportlab crccheck google-genai pyserial numpy aiosqlite
 
 EXPOSE 8000
 

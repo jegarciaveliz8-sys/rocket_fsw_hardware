@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | High-Fidelity Cesium 3D MCC</title>
-    <!-- CesiumJS Engine CDN -->
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.108/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.108/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Cesium.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Widgets/widgets.css" rel="stylesheet">
     <style>
         body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 15px; }
         header { border-bottom: 2px solid #00ffcc; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
@@ -24,13 +23,11 @@
         <h1>🚀 ODYSSEY-1 | CESIUM 3D GLOBAL MISSION CONTROL CENTER</h1>
         <div id="status">● TELEMETRY LINK: ACTIVE</div>
     </header>
-
     <div class="layout">
         <div class="panel">
             <h3>🌐 Visualización Geoespacial 3D (CesiumJS World Globe)</h3>
             <div id="cesiumContainer"></div>
         </div>
-
         <div class="panel">
             <h3>🛰️ Vector de Estado & N-Cuerpos</h3>
             <div>Altitud Orbital: <span id="alt" class="metric">-- km</span></div>
@@ -42,7 +39,6 @@
             <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL</span></div>
         </div>
     </div>
-
     <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
         <div class="panel">
             <h3>🤖 Copiloto IA de Vuelo (Gemini RAG)</h3>
@@ -50,7 +46,6 @@
             <button onclick="sendAI()">Consultar Copiloto</button>
             <pre id="ai-res">Esperando comandos...</pre>
         </div>
-
         <div class="panel">
             <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
             <input type="number" id="target-alt" value="500" placeholder="Meta km">
@@ -58,13 +53,11 @@
             <pre id="burn-res">Standby</pre>
         </div>
     </div>
-
     <script>
-        // Inicialización de CesiumJS con Globe Globe
-        Cesium.Ion.defaultAccessToken = ''; // Token anónimo de renderizado local
+        Cesium.Ion.defaultAccessToken = '';
         const viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: new Cesium.TileMapServiceImageryProvider({
-                url: Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+            imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+                url: 'https://a.tile.openstreetmap.org/'
             }),
             baseLayerPicker: false,
             geocoder: false,
@@ -73,8 +66,7 @@
             sceneModePicker: false,
             navigationHelpButton: false
         });
-
-        // Satélite ODYSSEY-1 en Cesium 3D
+        
         const satelliteEntity = viewer.entities.add({
             name: 'ODYSSEY-1',
             position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
@@ -89,19 +81,19 @@
             }
         });
 
-        // WebSocket Telemetry Feed
-        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
+        
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            document.getElementById('alt').innerText = data.altitude_km + " km";
-            document.getElementById('vel').innerText = data.speed_kmh + " km/h";
-            document.getElementById('soi').innerText = data.active_soi;
-            document.getElementById('fsm').innerText = data.sequencer_state;
-            document.getElementById('dsn').innerText = data.dsn_station;
-            document.getElementById('d2').innerText = data.mahalanobis_d2;
-            document.getElementById('hil').innerText = data.hil_mode;
-
-            // Actualizar Posición ECI/ECEF en Globe Cesium 3D
+            document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
+            document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
+            document.getElementById('soi').innerText = data.active_soi ?? '--';
+            document.getElementById('fsm').innerText = data.sequencer_state ?? '--';
+            document.getElementById('dsn').innerText = data.dsn_station ?? '--';
+            document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
+            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
+            
             if (data.position_xyz) {
                 const x = data.position_xyz[0];
                 const y = data.position_xyz[1];
@@ -113,16 +105,25 @@
         async function sendAI() {
             const q = document.getElementById('ai-query').value;
             document.getElementById('ai-res').innerText = "Procesando...";
-            const res = await fetch('/api/ai/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) });
-            const j = await res.json();
-            document.getElementById('ai-res').innerText = j.response;
+            try {
+                const res = await fetch('/api/ai/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) });
+                const j = await res.json();
+                document.getElementById('ai-res').innerText = j.response;
+            } catch (err) {
+                document.getElementById('ai-res').innerText = "Error de conexión con el copiloto.";
+            }
         }
 
         async function calcBurn() {
             const alt = parseFloat(document.getElementById('target-alt').value);
-            const res = await fetch('/api/orbit/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({target_altitude_km: alt}) });
-            const j = await res.json();
-            document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
+            document.getElementById('burn-res').innerText = "Calculando trayectoria...";
+            try {
+                const res = await fetch('/api/orbit/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({target_altitude_km: alt}) });
+                const j = await res.json();
+                document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
+            } catch (err) {
+                document.getElementById('burn-res').innerText = "Error al calcular maniobra.";
+            }
         }
     </script>
 </body>

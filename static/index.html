@@ -55,10 +55,12 @@
     </div>
     <script>
         Cesium.Ion.defaultAccessToken = '';
+
         const viewer = new Cesium.Viewer('cesiumContainer', {
             imageryProvider: new Cesium.OpenStreetMapImageryProvider({
                 url: 'https://a.tile.openstreetmap.org/'
             }),
+            terrainProvider: undefined,
             baseLayerPicker: false,
             geocoder: false,
             timeline: false,
@@ -70,18 +72,18 @@
         const satelliteEntity = viewer.entities.add({
             name: 'ODYSSEY-1',
             position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
-            point: { pixelSize: 12, color: Cesium.Color.CYAN },
+            point: { pixelSize: 14, color: Cesium.Color.CYAN },
             path: {
                 resolution: 1,
                 material: new Cesium.PolylineGlowMaterialProperty({
-                    glowPower: 0.2,
+                    glowPower: 0.3,
                     color: Cesium.Color.YELLOW
                 }),
                 width: 3
             }
         });
 
-        // FORZAR A LA CÁMARA A SEGUIR EL SATÉLITE AUTOMÁTICAMENTE
+        // Centrar la cámara inicialmente en el satélite
         viewer.trackedEntity = satelliteEntity;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -97,11 +99,11 @@
             document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
             document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
             
-            if (data.position_xyz) {
-                const x = data.position_xyz[0];
-                const y = data.position_xyz[1];
-                const z = data.position_xyz[2];
-                satelliteEntity.position = new Cesium.ConstantPositionProperty(new Cesium.Cartesian3(x, y, z));
+            if (data.geodetic) {
+                const lon = data.geodetic.lon;
+                const lat = data.geodetic.lat;
+                const alt = data.geodetic.alt;
+                satelliteEntity.position = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
             }
         };
 

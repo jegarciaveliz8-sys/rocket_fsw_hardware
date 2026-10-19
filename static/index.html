@@ -56,63 +56,74 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
-        // Usar la capa satelital fotorrealista gratuita de ESRI (ArcGIS World Imagery)
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
-                url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
-            }),
-            terrainProvider: undefined,
-            baseLayerPicker: false,
-            geocoder: false,
-            timeline: false,
-            animation: false,
-            sceneModePicker: false,
-            navigationHelpButton: false
-        });
-        
-        const satelliteEntity = viewer.entities.add({
-            name: 'ODYSSEY-1',
-            position: Cesium.Cartesian3.fromDegrees(-90, 20, 400000),
-            point: { pixelSize: 14, color: Cesium.Color.CYAN },
-            path: {
-                resolution: 1,
-                material: new Cesium.PolylineGlowMaterialProperty({
-                    glowPower: 0.3,
-                    color: Cesium.Color.YELLOW
-                }),
-                width: 3
-            }
-        });
+        // Inicializar el visor con carga asincrónica segura de ArcGIS World Imagery para Cesium 1.108+
+        async function initViewer() {
+            const viewer = new Cesium.Viewer('cesiumContainer', {
+                terrainProvider: undefined,
+                baseLayerPicker: false,
+                geocoder: false,
+                timeline: false,
+                animation: false,
+                sceneModePicker: false,
+                navigationHelpButton: false
+            });
 
-        viewer.trackedEntity = satelliteEntity;
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
-        
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
-            document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
-            document.getElementById('soi').innerText = data.active_soi ?? '--';
-            
-            // Forzar estado nominal si viene ABORT_MISSION por condiciones iniciales
-            const state = (data.sequencer_state && data.sequencer_state.includes("ABORT")) ? "ORBITAL_PROPAGATION" : data.sequencer_state;
-            document.getElementById('fsm').innerText = state ?? 'ORBITAL_PROPAGATION';
-            
-            document.getElementById('dsn').innerText = data.dsn_station ?? '--';
-            document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
-            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL_SIMULATION';
-            
-            if (data.geodetic) {
-                const lon = data.geodetic.lon;
-                const lat = data.geodetic.lat;
-                const alt = data.geodetic.alt;
-                
-                satelliteEntity.position = new Cesium.ConstantPositionProperty(
-                    Cesium.Cartesian3.fromDegrees(lon, lat, alt)
+            try {
+                // Carga el mapa base satelital de forma moderna y compatible
+                const imageryProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+                    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
                 );
+                viewer.imageryLayers.removeAll();
+                viewer.imageryLayers.addImageryProvider(imageryProvider);
+            } catch (e) {
+                console.warn("No se pudo cargar ESRI imagery, usando fallback por defecto", e);
             }
-        };
+
+            const satelliteEntity = viewer.entities.add({
+                name: 'ODYSSEY-1',
+                position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
+                point: { pixelSize: 14, color: Cesium.Color.CYAN },
+                path: {
+                    resolution: 1,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        glowPower: 0.3,
+                        color: Cesium.Color.YELLOW
+                    }),
+                    width: 3
+                }
+            });
+
+            viewer.trackedEntity = satelliteEntity;
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
+                document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
+                document.getElementById('soi').innerText = data.active_soi ?? '--';
+                
+                const state = (data.sequencer_state && data.sequencer_state.includes("ABORT")) ? "ORBITAL_PROPAGATION" : data.sequencer_state;
+                document.getElementById('fsm').innerText = state ?? 'ORBITAL_PROPAGATION';
+                
+                document.getElementById('dsn').innerText = data.dsn_station ?? '--';
+                document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
+                document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL_SIMULATION';
+                
+                if (data.geodetic) {
+                    const lon = data.geodetic.lon;
+                    const lat = data.geodetic.lat;
+                    const alt = data.geodetic.alt;
+                    
+                    satelliteEntity.position = new Cesium.ConstantPositionProperty(
+                        Cesium.Cartesian3.fromDegrees(lon, lat, alt)
+                    );
+                }
+            };
+        }
+
+        initViewer();
 
         async function sendAI() {
             const q = document.getElementById('ai-query').value;

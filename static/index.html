@@ -11,7 +11,7 @@
         h1 { margin: 0; font-size: 20px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 15px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #cesiumContainer { width: 100%; height: 380px; border-radius: 4px; overflow: hidden; }
+        #cesiumContainer { width: 100%; height: 380px; border-radius: 4px; overflow: hidden; position: relative; }
         .metric { font-size: 16px; font-weight: bold; color: #f3f4f6; margin: 4px 0; }
         textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; }
         button { background: #0284c7; color: #fff; border: none; padding: 8px; margin-top: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
@@ -56,27 +56,26 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
-        // Inicializar el visor con carga asincrónica segura de ArcGIS World Imagery para Cesium 1.108+
         async function initViewer() {
+            // Habilitamos los selectores y buscadores nativos (geocoder, baseLayerPicker, sceneModePicker)
             const viewer = new Cesium.Viewer('cesiumContainer', {
                 terrainProvider: undefined,
-                baseLayerPicker: false,
-                geocoder: false,
+                baseLayerPicker: true,     // Selector de mapas base
+                geocoder: true,          // Buscador de lugares y coordenadas
                 timeline: false,
                 animation: false,
-                sceneModePicker: false,
-                navigationHelpButton: false
+                sceneModePicker: true,   // Selector de vista 2D, 3D y Columbus View
+                navigationHelpButton: true // Botón de ayuda con controles de cámara
             });
 
             try {
-                // Carga el mapa base satelital de forma moderna y compatible
                 const imageryProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
                     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
                 );
                 viewer.imageryLayers.removeAll();
                 viewer.imageryLayers.addImageryProvider(imageryProvider);
             } catch (e) {
-                console.warn("No se pudo cargar ESRI imagery, usando fallback por defecto", e);
+                console.warn("No se pudo cargar ESRI imagery", e);
             }
 
             const satelliteEntity = viewer.entities.add({

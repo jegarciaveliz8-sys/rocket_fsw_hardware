@@ -56,9 +56,11 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
+        // Proveedor de mapa abierto con plantilla de teselas directa de OpenStreetMap
         const viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: new Cesium.OpenStreetMapImageryProvider({
-                url: 'https://a.tile.openstreetmap.org/'
+            imageryProvider: new Cesium.UrlTemplateImageryProvider({
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                credit: 'OpenStreetMap contributors'
             }),
             terrainProvider: undefined,
             baseLayerPicker: false,
@@ -83,7 +85,6 @@
             }
         });
 
-        // Centrar la cámara inicialmente en el satélite
         viewer.trackedEntity = satelliteEntity;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -103,7 +104,11 @@
                 const lon = data.geodetic.lon;
                 const lat = data.geodetic.lat;
                 const alt = data.geodetic.alt;
-                satelliteEntity.position = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+                
+                // Asignación con ConstantPositionProperty para redibujado en tiempo real
+                satelliteEntity.position = new Cesium.ConstantPositionProperty(
+                    Cesium.Cartesian3.fromDegrees(lon, lat, alt)
+                );
             }
         };
 

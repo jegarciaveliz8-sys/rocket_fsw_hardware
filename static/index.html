@@ -2,85 +2,110 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | High-Fidelity Cesium 3D MCC</title>
+    <title>ODYSSEY-1 | High-Fidelity Tactical & Orbital MCC</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Cesium.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Widgets/widgets.css" rel="stylesheet">
     <style>
-        body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 15px; }
-        header { border-bottom: 2px solid #00ffcc; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        h1 { margin: 0; font-size: 20px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
-        .layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 15px; }
+        body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 12px; }
+        header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
+        .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #cesiumContainer { width: 100%; height: 380px; border-radius: 4px; overflow: hidden; position: relative; }
-        .metric { font-size: 16px; font-weight: bold; color: #f3f4f6; margin: 4px 0; }
-        textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; }
-        label { font-size: 11px; color: #38bdf8; display: block; margin-top: 4px; }
-        button { background: #0284c7; color: #fff; border: none; padding: 8px; margin-top: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        pre { background: #020617; padding: 6px; font-size: 11px; color: #34d399; max-height: 90px; overflow-y: auto; }
+        #cesiumContainer { width: 100%; height: 420px; border-radius: 4px; overflow: hidden; position: relative; }
+        .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 3px 0; }
+        textarea, input, select { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 5px; font-family: monospace; }
+        label { font-size: 10px; color: #38bdf8; display: block; margin-top: 3px; font-weight: bold; }
+        button { background: #0284c7; color: #fff; border: none; padding: 7px; margin-top: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:hover { background: #0369a1; }
+        pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 80px; overflow-y: auto; margin-top: 4px; }
+        .cam-controls { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); padding: 6px; border-radius: 4px; border: 1px solid #00ffcc; }
+        .cam-controls button { width: auto; padding: 4px 8px; font-size: 10px; margin-right: 4px; display: inline-block; }
     </style>
 </head>
 <body>
     <header>
-        <h1>🚀 ODYSSEY-1 | CESIUM 3D GLOBAL MISSION CONTROL CENTER</h1>
+        <h1>🚀 ODYSSEY-1 | ADVANCED TACTICAL & ORBITAL MISSION CONTROL</h1>
         <div id="status">● TELEMETRY LINK: ACTIVE</div>
     </header>
     <div class="layout">
-        <div class="panel">
-            <h3>🌐 Visualización Geoespacial 3D (Trayectoria & Puntos Balísticos)</h3>
+        <div class="panel" style="position: relative;">
+            <h3>🌐 Visualización Geoespacial 3D (Satélite HD & Terreno)</h3>
+            <div class="cam-controls">
+                <span style="font-size: 10px; color: #fff; margin-right: 5px;">CAM:</span>
+                <button onclick="setCamMode('tactical')" style="background: #0284c7;">🎯 Táctica Local</button>
+                <button onclick="setCamMode('chase')" style="background: #d97706;">🚀 Chase Cam</button>
+                <button onclick="setCamMode('global')" style="background: #4f46e5;">🌍 Global 3D</button>
+            </div>
             <div id="cesiumContainer"></div>
         </div>
         <div class="panel">
-            <h3>🛰️ Vector de Estado & N-Cuerpos</h3>
-            <div>Altitud Orbital: <span id="alt" class="metric">-- km</span></div>
-            <div>Velocidad Orbital: <span id="vel" class="metric">-- km/h</span></div>
-            <div>Esfera Influencia (SOI): <span id="soi" class="metric" style="color: #38bdf8;">--</span></div>
+            <h3>🛰️ Vector de Estado & Telemetría</h3>
+            <div>Altitud MSL: <span id="alt" class="metric">-- km</span></div>
+            <div>Velocidad Total: <span id="vel" class="metric">-- km/h</span></div>
+            <div>Distancia a Destino: <span id="dist-target" class="metric" style="color: #f59e0b;">-- km</span></div>
+            <div>Esfera Influencia (SOI): <span id="soi" style="font-size: 11px; color: #38bdf8;">--</span></div>
             <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #22c55e;">ORBITAL_PROPAGATION</span></div>
-            <div>Estación DSN: <span id="dsn" style="font-size: 12px;">--</span></div>
-            <div>Mahalanobis $D^2$: <span id="d2" class="metric">0.00</span></div>
+            <div>Estación DSN: <span id="dsn" style="font-size: 11px;">--</span></div>
             <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL_SIMULATION</span></div>
         </div>
     </div>
-    <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
+    <div class="layout" style="margin-top: 10px; grid-template-columns: 1.2fr 1fr;">
         <div class="panel">
-            <h3>🎯 Configuración de Coordenadas de Misión</h3>
-            <label>Pad de Salida (Lat, Lon):</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="number" id="pad-lat" value="28.572" step="any" placeholder="Lat">
-                <input type="number" id="pad-lon" value="-80.604" step="any" placeholder="Lon">
+            <h3>🎯 Configuración de Misión (Corta / Larga Distancia)</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                    <label>Pad de Salida (Lat, Lon):</label>
+                    <input type="number" id="pad-lat" value="14.7883" step="any" placeholder="Lat">
+                    <input type="number" id="pad-lon" value="-90.1988" step="any" placeholder="Lon">
+                </div>
+                <div>
+                    <label>Zona de Destino (Lat, Lon):</label>
+                    <input type="number" id="target-lat" value="14.6133" step="any" placeholder="Lat">
+                    <input type="number" id="target-lon" value="-90.5283" step="any" placeholder="Lon">
+                </div>
             </div>
-            <label>Destino / Zona de Impacto (Lat, Lon):</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="number" id="target-lat" value="30.0" step="any" placeholder="Lat">
-                <input type="number" id="target-lon" value="15.0" step="any" placeholder="Lon">
-            </div>
-            <button onclick="updateMissionCoordinates()" style="background: #0284c7;">Actualizar Posiciones en Servidor y Mapa</button>
+            <button onclick="updateMissionCoordinates()" style="background: #0284c7;">⚡ Cargar Ruta en Servidor y Reenfocar Mapa</button>
         </div>
         <div class="panel">
-            <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
-            <input type="number" id="target-alt" value="500" placeholder="Meta km">
-            <button onclick="calcBurn()" style="background: #0d9488;">Calcular Maniobra</button>
-            <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; margin-top: 8px; display: none;">📡 ENVIAR TC UPLINK (TRANSMITIR A BORDO)</button>
+            <h3>📐 Solucionador Balístico ($\Delta v$) & Uplink</h3>
+            <div style="display: flex; gap: 6px;">
+                <input type="number" id="target-alt" value="50" placeholder="Meta km">
+                <button onclick="calcBurn()" style="background: #0d9488; margin-top: 0;">Calcular Δv</button>
+            </div>
+            <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; display: none;">📡 ENVIAR UPLINK A BORDO</button>
             <pre id="burn-res">Standby</pre>
-            <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 5px;">Esperando transmisión...</pre>
+            <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 3px;">Esperando transmisión...</pre>
         </div>
     </div>
     <script>
         Cesium.Ion.defaultAccessToken = '';
-        let currentBurnPlan = null;
         let viewer, launchPadEntity, impactEntity, satelliteEntity;
         let trajectoryHistory = [];
+        let currentBurnPlan = null;
+
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371.0;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
         async function initViewer() {
             viewer = new Cesium.Viewer('cesiumContainer', {
-                terrainProvider: undefined,
+                terrainProvider: Cesium.createWorldTerrain(),
                 baseLayerPicker: true,
                 geocoder: true,
                 timeline: false,
                 animation: false,
                 sceneModePicker: true,
-                navigationHelpButton: true
+                navigationHelpButton: false
             });
 
+            // Cargar capa satelital HD de ArcGIS
             try {
                 const imageryProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
                     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
@@ -88,7 +113,7 @@
                 viewer.imageryLayers.removeAll();
                 viewer.imageryLayers.addImageryProvider(imageryProvider);
             } catch (e) {
-                console.warn("No se pudo cargar ESRI imagery", e);
+                console.warn("Utilizando visor base de Cesium", e);
             }
 
             const pLat = parseFloat(document.getElementById('pad-lat').value);
@@ -102,16 +127,16 @@
             trajectoryHistory = [launchPos];
 
             launchPadEntity = viewer.entities.add({
-                name: 'Punto de Salida',
+                name: 'Pad de Salida',
                 position: launchPos,
-                point: { pixelSize: 12, color: Cesium.Color.ORANGE },
+                point: { pixelSize: 10, color: Cesium.Color.ORANGE },
                 label: {
-                    text: 'PAD DE SALIDA',
-                    font: '11pt monospace',
+                    text: 'ORIGEN: SANARATE',
+                    font: '10pt monospace',
                     fillColor: Cesium.Color.ORANGE,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 2,
-                    pixelOffset: new Cesium.Cartesian2(0, -20)
+                    pixelOffset: new Cesium.Cartesian2(0, -18)
                 }
             });
 
@@ -119,37 +144,37 @@
                 name: 'ODYSSEY-1',
                 position: launchPos,
                 cylinder: {
-                    length: 30000.0,
+                    length: 8000.0,
                     topRadius: 0.0,
-                    bottomRadius: 8000.0,
+                    bottomRadius: 2500.0,
                     material: Cesium.Color.CYAN
                 },
                 label: {
                     text: '🚀 ODYSSEY-1',
-                    font: '11pt monospace',
+                    font: '10pt monospace',
                     fillColor: Cesium.Color.CYAN,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 2,
-                    pixelOffset: new Cesium.Cartesian2(0, -30)
+                    pixelOffset: new Cesium.Cartesian2(0, -25)
                 }
             });
 
             impactEntity = viewer.entities.add({
-                name: 'Zona de Destino / Impacto',
+                name: 'Zona Objetivo',
                 position: targetPos,
-                point: { pixelSize: 14, color: Cesium.Color.RED },
+                point: { pixelSize: 12, color: Cesium.Color.RED },
                 label: {
-                    text: '🎯 ZONA DE DESTINO / IMPACTO',
-                    font: '11pt monospace',
+                    text: '🎯 DESTINO: CEMENTERIO GUATEMALA',
+                    font: '10pt monospace',
                     fillColor: Cesium.Color.RED,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 2,
-                    pixelOffset: new Cesium.Cartesian2(0, -25)
+                    pixelOffset: new Cesium.Cartesian2(0, -20)
                 },
                 ellipse: {
-                    semiMajorAxis: 40000.0,
-                    semiMinorAxis: 40000.0,
-                    material: Cesium.Color.RED.withAlpha(0.3),
+                    semiMajorAxis: 5000.0,
+                    semiMinorAxis: 5000.0,
+                    material: Cesium.Color.RED.withAlpha(0.25),
                     outline: true,
                     outlineColor: Cesium.Color.RED
                 }
@@ -161,13 +186,13 @@
                     positions: new Cesium.CallbackProperty(() => trajectoryHistory, false),
                     width: 4,
                     material: new Cesium.PolylineGlowMaterialProperty({
-                        glowPower: 0.2,
+                        glowPower: 0.25,
                         color: Cesium.Color.YELLOW
                     })
                 }
             });
 
-            viewer.trackedEntity = satelliteEntity;
+            setCamMode('tactical');
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
@@ -182,7 +207,6 @@
                 document.getElementById('fsm').innerText = state ?? 'ORBITAL_PROPAGATION';
                 
                 document.getElementById('dsn').innerText = data.dsn_station ?? '--';
-                document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
                 document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL_SIMULATION';
                 
                 if (data.geodetic) {
@@ -195,8 +219,39 @@
 
                     if (trajectoryHistory.length > 500) trajectoryHistory.shift();
                     trajectoryHistory.push(newPos);
+
+                    const distKm = calculateHaversineDistance(lat, lon, parseFloat(document.getElementById('target-lat').value), parseFloat(document.getElementById('target-lon').value));
+                    document.getElementById('dist-target').innerText = distKm.toFixed(2) + " km";
                 }
             };
+        }
+
+        function setCamMode(mode) {
+            const pLat = parseFloat(document.getElementById('pad-lat').value);
+            const pLon = parseFloat(document.getElementById('pad-lon').value);
+            const tLat = parseFloat(document.getElementById('target-lat').value);
+            const tLon = parseFloat(document.getElementById('target-lon').value);
+
+            viewer.trackedEntity = undefined;
+
+            if (mode === 'tactical') {
+                const midLon = (pLon + tLon) / 2;
+                const midLat = (pLat + tLat) / 2;
+                const dist = calculateHaversineDistance(pLat, pLon, tLat, tLon);
+                const altitudeCam = Math.max(dist * 1800, 25000);
+                
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(midLon, midLat, altitudeCam),
+                    duration: 1.5
+                });
+            } else if (mode === 'chase') {
+                viewer.trackedEntity = satelliteEntity;
+            } else if (mode === 'global') {
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(-90.0, 15.0, 12000000.0),
+                    duration: 2.0
+                });
+            }
         }
 
         async function updateMissionCoordinates() {
@@ -206,16 +261,13 @@
             const tLon = parseFloat(document.getElementById('target-lon').value);
 
             try {
-                // Envío de coordenadas al backend FastAPI
                 const res = await fetch('/api/mission/coordinates', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ pad_lat: pLat, pad_lon: pLon, target_lat: tLat, target_lon: tLon })
                 });
-                const data = await res.json();
-
+                
                 if (res.ok) {
-                    // Actualización local en CesiumJS
                     const newLaunchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
                     const newTargetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
 
@@ -223,12 +275,10 @@
                     impactEntity.position = newTargetPos;
                     trajectoryHistory = [newLaunchPos];
 
-                    alert("Coordenadas actualizadas exitosamente en el servidor y en el visor 3D.");
-                } else {
-                    alert("Error en el servidor al actualizar coordenadas.");
+                    setCamMode('tactical');
                 }
             } catch (err) {
-                alert("Error de conexión al enviar coordenadas al backend.");
+                alert("Error de conexión al actualizar coordenadas.");
             }
         }
 

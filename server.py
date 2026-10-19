@@ -27,7 +27,13 @@ sequencer = FlightSequencer()
 swarm = SwarmConstellationManager()
 hil = HardwareInTheLoopBridge()
 
-state_real = np.array([6778137.0, 0.0, 0.0, 0.0, 7670.0, 0.0])
+# Inicialización nominal a ~400 km de altitud para evitar falsos positivos de aborto LES
+R_earth = 6378137.0
+init_alt = 400000.0
+r_init = R_earth + init_alt
+v_init = np.sqrt(3.986004418e14 / r_init) # Velocidad circular LEO
+state_real = np.array([r_init, 0.0, 0.0, 0.0, v_init, 0.0])
+
 mass = 50000.0
 cd = 0.3
 area = 10.0
@@ -59,7 +65,7 @@ class HILPayload(BaseModel):
 async def ask_ai(data: AIQuery):
     pos = state_real[:3]
     vel = state_real[3:]
-    alt_km = (np.linalg.norm(pos) - 6378137.0) / 1000.0
+    alt_km = (np.linalg.norm(pos) - R_earth) / 1000.0
     speed_kms = np.linalg.norm(vel) / 1000.0
     active_dsn, dsn_elev = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
     
@@ -107,7 +113,6 @@ async def websocket_telemetry(websocket: WebSocket):
         while True:
             sim_time_sec += 1
             
-            # Verificación de aceleración N-Cuerpos
             pos = state_real[:3]
             vel = state_real[3:]
             nbody_acc, active_soi = nbody_gravitational_acceleration(pos, sim_time_sec)
@@ -129,7 +134,7 @@ async def websocket_telemetry(websocket: WebSocket):
             gps_measured = pos + np.random.normal(0, 5.0, 3)
             residual, S_cov = ukf.update(gps_measured)
             
-            alt_m = np.linalg.norm(pos) - 6378137.0
+            alt_m = np.linalg.norm(pos) - R_earth
             speed_ms = np.linalg.norm(vel)
             dyn_pressure = 0.5 * 1.225 * (speed_ms**2)
             
@@ -138,6 +143,20 @@ async def websocket_telemetry(websocket: WebSocket):
             dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
             fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
             
+            # Conversión ECI a ECEF considerando la rotación de la Tierra (omega_earth * t)
+            omega_e = 7.292115e-5 # rad/s
+            theta = omega_e * sim_time_sec
+            cos_t, sin_t = np.cos(theta), np.sin(theta)
+            
+            x_ecef = pos[0] * cos_t + pos[1] * sin_t
+            y_ecef = -pos[0] * sin_t + pos[1] * cos_t
+            z_ecef = pos[2]
+            
+            # Cálculo de Latitud, Longitud y Altitud geodésica aproximada para Cesium
+            r_xy = np.sqrt(x_ecef**2 + y_ecef**2)
+            lat = np.arctan2(z_ecef, r_xy) * 180.0 / np.pi
+            lon = np.arctan2(y_ecef, x_ecef) * 180.0 / np.pi
+            
             payload_str = f"ALT:{alt_m:.2f};VEL:{speed_ms:.2f};D2_M:{d_mahalanobis:.2f};FDIR:{fdir.status};SEQ:{seq_state}"
             ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
             security_check = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
@@ -145,7 +164,8 @@ async def websocket_telemetry(websocket: WebSocket):
             telemetry_data = {
                 "altitude_km": round(alt_m / 1000.0, 3),
                 "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),
-                "position_xyz": [round(float(p), 1) for p in pos],
+                "position_xyz": [round(float(x_ecef), 1), round(float(y_ecef), 1), round(float(z_ecef), 1)],
+                "geodetic": {"lat": round(lat, 4), "lon": round(lon, 4), "alt": round(alt_m, 1)},
                 "active_soi": active_soi,
                 "sequencer_state": seq_state,
                 "mission_elapsed_time": met,

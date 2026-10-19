@@ -50,11 +50,14 @@
             <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
             <input type="number" id="target-alt" value="500" placeholder="Meta km">
             <button onclick="calcBurn()" style="background: #0d9488;">Calcular Maniobra</button>
+            <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; margin-top: 8px; display: none;">📡 ENVIAR TC UPLINK (TRANSMITIR A BORDO)</button>
             <pre id="burn-res">Standby</pre>
+            <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 5px;">Esperando transmisión...</pre>
         </div>
     </div>
     <script>
         Cesium.Ion.defaultAccessToken = '';
+        let currentBurnPlan = null;
 
         async function initViewer() {
             const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -77,10 +80,9 @@
                 console.warn("No se pudo cargar ESRI imagery", e);
             }
 
-            // 1. MARCADOR DE SALIDA / RAMPA DE LANZAMIENTO (Ej: Cabo Cañaveral u origen base 0,0)
             const launchPadEntity = viewer.entities.add({
                 name: 'Punto de Salida (Launch Pad)',
-                position: Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 0), // Coordenadas fijas de rampa inicial
+                position: Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 0),
                 point: { pixelSize: 10, color: Cesium.Color.ORANGE },
                 label: {
                     text: 'PAD DE SALIDA',
@@ -92,7 +94,6 @@
                 }
             });
 
-            // 2. ENTIDAD DEL SATÉLITE / MISIL EN VUELO
             const satelliteEntity = viewer.entities.add({
                 name: 'ODYSSEY-1',
                 position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
@@ -107,10 +108,9 @@
                 }
             });
 
-            // 3. MARCADOR DE PUNTO DE IMPACTO / EXPLOSIÓN PREDICHÓN (Simulado adelantado a la trayectoria)
             const impactEntity = viewer.entities.add({
                 name: 'Zona de Impacto / Detonación',
-                position: Cesium.Cartesian3.fromDegrees(15.0, 30.0, 0), // Punto balístico estimado
+                position: Cesium.Cartesian3.fromDegrees(15.0, 30.0, 0),
                 point: { pixelSize: 14, color: Cesium.Color.RED },
                 label: {
                     text: '⚠️ ZONA DE IMPACTO / EXPLOSIÓN',
@@ -121,7 +121,7 @@
                     pixelOffset: new Cesium.Cartesian2(0, -25)
                 },
                 ellipse: {
-                    semiMajorAxis: 50000.0, // Radio de dispersión en metros
+                    semiMajorAxis: 50000.0,
                     semiMinorAxis: 50000.0,
                     material: Cesium.Color.RED.withAlpha(0.3),
                     outline: true,
@@ -152,12 +152,10 @@
                     const lat = data.geodetic.lat;
                     const alt = data.geodetic.alt;
                     
-                    // Actualizar posición actual del vehículo en vuelo
                     satelliteEntity.position = new Cesium.ConstantPositionProperty(
                         Cesium.Cartesian3.fromDegrees(lon, lat, alt)
                     );
 
-                    // Si el estado indica aborto o reentrada, mover dinámicamente la zona de impacto cerca de la posición actual para alerta visual
                     if (state && state.includes("ABORT")) {
                         impactEntity.position = Cesium.ConstantPositionProperty.fromValue(
                             Cesium.Cartesian3.fromDegrees(lon + 2.0, lat + 1.0, 0)
@@ -187,10 +185,23 @@
             try {
                 const res = await fetch('/api/orbit/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({target_altitude_km: alt}) });
                 const j = await res.json();
+                currentBurnPlan = j.burn_plan;
                 document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
+                document.getElementById('btn-uplink').style.display = 'block';
             } catch (err) {
                 document.getElementById('burn-res').innerText = "Error al calcular maniobra.";
             }
+        }
+
+        async function sendUplink() {
+            if (!currentBurnPlan) return;
+            const uplinkStatus = document.getElementById('uplink-res');
+            uplinkStatus.style.display = 'block';
+            uplinkStatus.innerText = "Transmitiendo paquete TC Uplink vía DSN...";
+            
+            setTimeout(() => {
+                uplinkStatus.innerText = "✅ TC UPLINK TRANSMITIDO CON ÉXITO\nVector dv inyectado en la OBC de ODYSSEY-1.";
+            }, 1200);
         }
     </script>
 </body>

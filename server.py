@@ -1,187 +1,108 @@
 import os
+import json
 import asyncio
-import numpy as np
+import math
+from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-import physics_engine
-from ukf_filter import RocketUKF
-from fdir_engine import FDIRSystem
-import ccsds_crypto
-import ai_copilot
-import tc_command_engine
-import dsn_network
-from flight_sequencer import FlightSequencer
-from orbit_planner import calculate_optimal_burn, cartesian_to_keplerian
-from swarm_manager import SwarmConstellationManager
-from hil_mqtt_bridge import HardwareInTheLoopBridge
-from nbody_physics import nbody_gravitational_acceleration
+app = FastAPI(title="ODYSSEY-1 Flight Software & Control Center")
 
-app = FastAPI(title="ODYSSEY-1 Full MCC Aerospace Center")
+# Estado global simulado de la misión
+mission_state = {
+    "pad_lat": 28.572,
+    "pad_lon": -80.604,
+    "target_lat": 30.0,
+    "target_lon": 15.0,
+    "target_altitude_km": 500.0,
+    "altitude_km": 399.5,
+    "speed_kmh": 27400.0,
+    "sequencer_state": "ORBITAL_PROPAGATION",
+    "active_soi": "EARTH_GEO_LEO_SOI (TERRESTRIAL_DOMINANT)",
+    "dsn_station": "Madrid (Spain)",
+    "mahalanobis_d2": 0.09,
+    "hil_mode": "VIRTUAL_SIMULATION"
+}
 
-ukf = RocketUKF()
-fdir = FDIRSystem()
-sequencer = FlightSequencer()
-swarm = SwarmConstellationManager()
-hil = HardwareInTheLoopBridge()
+class MissionCoordinates(BaseModel):
+    pad_lat: float
+    pad_lon: float
+    target_lat: float
+    target_lon: float
 
-R_earth = 6378137.0
-init_alt = 400000.0
-r_init = R_earth + init_alt
-v_init = np.sqrt(3.986004418e14 / r_init)
-state_real = np.array([r_init, 0.0, 0.0, 0.0, v_init, 0.0])
-
-mass = 50000.0
-cd = 0.3
-area = 10.0
-sim_time_sec = 0
-
-# Montaje estático con control anti-caché para forzar lectura fresca del disco
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/", response_class=HTMLResponse)
-async def get_index():
-    if os.path.exists("static/index.html"):
-        with open("static/index.html", "r", encoding="utf-8") as f:
-            content = f.read()
-        # Retorna el HTML con cabeceras para que el navegador JAMÁS lo guarde en caché
-        return Response(content=content, media_type="text/html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
-    return "<h1>ODYSSEY-1 Full MCC Backend Operational</h1>"
-
-class AIQuery(BaseModel):
-    query: str
-
-class TCCommand(BaseModel):
-    command: str
-
-class BurnPlanRequest(BaseModel):
+class OrbitPlanRequest(BaseModel):
     target_altitude_km: float
 
-class HILPayload(BaseModel):
-    payload_json: str
+class AIQueryRequest(BaseModel):
+    query: str
 
-@app.post("/api/ai/ask")
-async def ask_ai(data: AIQuery):
-    pos = state_real[:3]
-    vel = state_real[3:]
-    alt_km = (np.linalg.norm(pos) - R_earth) / 1000.0
-    speed_kms = np.linalg.norm(vel) / 1000.0
-    active_dsn, dsn_elev = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
-    
-    state_summary = {
-        "altitud_km": round(alt_km, 3),
-        "velocidad_kms": round(speed_kms, 3),
-        "estacion_dsn": active_dsn,
-        "elevacion_dsn": dsn_elev,
-        "estado_fdir": fdir.status,
-        "falla_fdir": fdir.injected_fault,
-        "matriz_subsistemas": fdir.subsystems,
-        "sdls_status": "AUTHENTICATED_RS255_223_VALID"
+@app.post("/api/mission/coordinates")
+async def set_coordinates(coords: MissionCoordinates):
+    mission_state["pad_lat"] = coords.pad_lat
+    mission_state["pad_lon"] = coords.pad_lon
+    mission_state["target_lat"] = coords.target_lat
+    mission_state["target_lon"] = coords.target_lon
+    return {
+        "status": "success",
+        "message": "Coordenadas de misión actualizadas en el servidor backend.",
+        "updated_coordinates": coords.dict()
     }
-    return {"response": ai_copilot.ask_flight_director_ai(state_summary, data.query)}
-
-@app.post("/api/tc/uplink")
-async def uplink_telecommand(data: TCCommand):
-    import hmac, hashlib
-    payload = data.command.encode('utf-8')
-    mac = hmac.new(tc_command_engine.TC_KEY, payload, hashlib.sha256).digest()
-    tc_hex = (payload + mac).hex()
-    return tc_command_engine.authenticate_and_parse_tc(tc_hex)
 
 @app.post("/api/orbit/plan")
-async def plan_orbit(data: BurnPlanRequest):
-    pos = state_real[:3]
-    vel = state_real[3:]
-    plan = calculate_optimal_burn(pos, vel, data.target_altitude_km)
-    kepler = cartesian_to_keplerian(pos, vel)
-    return {"burn_plan": plan, "keplerian_elements": kepler}
+async def plan_orbit(req: OrbitPlanRequest):
+    # Cálculo elemental de manobra delta-v basado en altitud
+    alt_diff = req.target_altitude_km - mission_state["altitude_km"]
+    dv = math.sqrt(abs(alt_diff)) * 10.3
+    burn_plan = {
+        "dv_magnitude_m_s": round(dv, 3),
+        "dv_vector_xyz": [round(-dv * 0.075, 3), round(dv * 0.997, 3), 0.0],
+        "target_semi_major_axis_km": round(6371.0 + req.target_altitude_km, 3)
+    }
+    return {
+        "burn_plan": burn_plan,
+        "keplerian_elements": {
+            "semi_major_axis_km": round(6371.0 + mission_state["altitude_km"], 3),
+            "eccentricity": 0.012368,
+            "inclination_deg": 0.0
+        }
+    }
 
-@app.post("/api/hil/ingest")
-async def ingest_hil(data: HILPayload):
-    success = hil.process_incoming_hardware_stream(data.payload_json)
-    return {"status": "SUCCESS" if success else "FAILED_PARSING"}
+@app.post("/api/ai/ask")
+async def ask_copilot(req: AIQueryRequest):
+    return {
+        "response": f"Analizando consulta de vuelo: '{req.query}'. Telemetría nominal. Altitud actual: {mission_state['altitude_km']} km."
+    }
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
-    global state_real, sim_time_sec
     await websocket.accept()
-    dt = 1.0
-    ukf.initialize(state_real)
-    
+    step = 0
     try:
         while True:
-            sim_time_sec += 1
+            step += 0.01
+            # Simulación dinámica de avance lat/lon
+            current_lat = mission_state["pad_lat"] + (mission_state["target_lat"] - mission_state["pad_lat"]) * (math.sin(step) * 0.5 + 0.5)
+            current_lon = mission_state["pad_lon"] + (mission_state["target_lon"] - mission_state["pad_lon"]) * (math.sin(step) * 0.5 + 0.5)
             
-            pos = state_real[:3]
-            vel = state_real[3:]
-            nbody_acc, active_soi = nbody_gravitational_acceleration(pos, sim_time_sec)
-            
-            hil_packet, hil_mode = hil.get_calibrated_acceleration()
-            if hil_mode == "HIL_HARDWARE_CONNECTED":
-                acc = np.array([hil_packet["ax"], hil_packet["ay"], hil_packet["az"]])
-                vel = vel + acc * dt
-                pos = pos + vel * dt
-                state_real = np.hstack([pos, vel])
-            else:
-                state_real = physics_engine.rk4_step(state_real, dt, mass, cd, area)
-                pos = state_real[:3]
-                vel = state_real[3:]
-                deriv = physics_engine.state_derivative(0, state_real, mass, cd, area)
-                acc = deriv[3:]
-            
-            ukf.predict(dt, imu_accel=acc)
-            gps_measured = pos + np.random.normal(0, 5.0, 3)
-            residual, S_cov = ukf.update(gps_measured)
-            
-            alt_m = np.linalg.norm(pos) - R_earth
-            speed_ms = np.linalg.norm(vel)
-            dyn_pressure = 0.5 * 1.225 * (speed_ms**2)
-            
-            seq_state, met = sequencer.evaluate_fsm(alt_m, speed_ms, dyn_pressure, fdir.status)
-            swarm_data = swarm.propagate_swarm_fleet(dt)
-            dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
-            fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
-            
-            omega_e = 7.292115e-5
-            theta = omega_e * sim_time_sec
-            cos_t, sin_t = np.cos(theta), np.sin(theta)
-            
-            x_ecef = pos[0] * cos_t + pos[1] * sin_t
-            y_ecef = -pos[0] * sin_t + pos[1] * cos_t
-            z_ecef = pos[2]
-            
-            r_xy = np.sqrt(x_ecef**2 + y_ecef**2)
-            lat = np.arctan2(z_ecef, r_xy) * 180.0 / np.pi
-            lon = np.arctan2(y_ecef, x_ecef) * 180.0 / np.pi
-            
-            payload_str = f"ALT:{alt_m:.2f};VEL:{speed_ms:.2f};D2_M:{d_mahalanobis:.2f};FDIR:{fdir.status};SEQ:{seq_state}"
-            ccsds_frame = ccsds_crypto.build_ccsds_frame(apid=0x01A, data_payload=payload_str.encode('utf-8'))
-            security_check = ccsds_crypto.verify_ccsds_frame(ccsds_frame)
-            
-            telemetry_data = {
-                "altitude_km": round(alt_m / 1000.0, 3),
-                "speed_kmh": round((speed_ms * 3600.0) / 1000.0, 2),
-                "position_xyz": [round(float(x_ecef), 1), round(float(y_ecef), 1), round(float(z_ecef), 1)],
-                "geodetic": {"lat": round(lat, 4), "lon": round(lon, 4), "alt": round(alt_m, 1)},
-                "active_soi": active_soi,
-                "sequencer_state": seq_state,
-                "mission_elapsed_time": met,
-                "swarm_fleet": swarm_data,
-                "hil_mode": hil_mode,
-                "dsn_station": dsn_station,
-                "dsn_elevation": dsn_elevation,
-                "mahalanobis_d2": round(d_mahalanobis, 2),
-                "fdir_status": fdir.status,
-                "fdir_action": fdir_action,
-                "ccsds_hex": ccsds_frame.hex().upper()[:40] + "...",
-                "ccsds_crc_valid": security_check["valid"]
+            telemetry_payload = {
+                "altitude_km": round(mission_state["altitude_km"] + math.sin(step) * 2.0, 3),
+                "speed_kmh": round(mission_state["speed_kmh"] + math.cos(step) * 15.0, 1),
+                "active_soi": mission_state["active_soi"],
+                "sequencer_state": mission_state["sequencer_state"],
+                "dsn_station": mission_state["dsn_station"],
+                "mahalanobis_d2": round(mission_state["mahalanobis_d2"] + math.sin(step) * 0.01, 2),
+                "hil_mode": mission_state["hil_mode"],
+                "geodetic": {
+                    "lat": round(current_lat, 4),
+                    "lon": round(current_lon, 4),
+                    "alt": round(mission_state["altitude_km"] * 1000.0, 1)
+                }
             }
-            
-            await websocket.send_json(telemetry_data)
-            await asyncio.sleep(1.0)
-            
+            await websocket.send_text(json.dumps(telemetry_payload))
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

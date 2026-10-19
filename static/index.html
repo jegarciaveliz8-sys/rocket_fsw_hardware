@@ -45,15 +45,15 @@
             <h3>🎯 Configuración de Coordenadas de Misión</h3>
             <label>Pad de Salida (Lat, Lon):</label>
             <div style="display: flex; gap: 5px;">
-                <input type="number" id="pad-lat" value="28.572" placeholder="Lat">
-                <input type="number" id="pad-lon" value="-80.604" placeholder="Lon">
+                <input type="number" id="pad-lat" value="28.572" step="any" placeholder="Lat">
+                <input type="number" id="pad-lon" value="-80.604" step="any" placeholder="Lon">
             </div>
             <label>Destino / Zona de Impacto (Lat, Lon):</label>
             <div style="display: flex; gap: 5px;">
-                <input type="number" id="target-lat" value="30.0" placeholder="Lat">
-                <input type="number" id="target-lon" value="15.0" placeholder="Lon">
+                <input type="number" id="target-lat" value="30.0" step="any" placeholder="Lat">
+                <input type="number" id="target-lon" value="15.0" step="any" placeholder="Lon">
             </div>
-            <button onclick="updateMissionCoordinates()" style="background: #0284c7;">Actualizar Posiciones en Mapa</button>
+            <button onclick="updateMissionCoordinates()" style="background: #0284c7;">Actualizar Posiciones en Servidor y Mapa</button>
         </div>
         <div class="panel">
             <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
@@ -101,7 +101,6 @@
 
             trajectoryHistory = [launchPos];
 
-            // 1. PAD DE SALIDA
             launchPadEntity = viewer.entities.add({
                 name: 'Punto de Salida',
                 position: launchPos,
@@ -116,7 +115,6 @@
                 }
             });
 
-            // 2. VEHÍCULO / MISIL 3D
             satelliteEntity = viewer.entities.add({
                 name: 'ODYSSEY-1',
                 position: launchPos,
@@ -136,7 +134,6 @@
                 }
             });
 
-            // 3. ZONA DE IMPACTO / DESTINO
             impactEntity = viewer.entities.add({
                 name: 'Zona de Destino / Impacto',
                 position: targetPos,
@@ -158,7 +155,6 @@
                 }
             });
 
-            // 4. LÍNEA CAMINANTE DE TRAYECTORIA
             viewer.entities.add({
                 name: 'Estela de Trayectoria',
                 polyline: {
@@ -203,20 +199,37 @@
             };
         }
 
-        function updateMissionCoordinates() {
+        async function updateMissionCoordinates() {
             const pLat = parseFloat(document.getElementById('pad-lat').value);
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
             const tLon = parseFloat(document.getElementById('target-lon').value);
 
-            const newLaunchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
-            const newTargetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
+            try {
+                // Envío de coordenadas al backend FastAPI
+                const res = await fetch('/api/mission/coordinates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pad_lat: pLat, pad_lon: pLon, target_lat: tLat, target_lon: tLon })
+                });
+                const data = await res.json();
 
-            launchPadEntity.position = newLaunchPos;
-            impactEntity.position = newTargetPos;
-            
-            trajectoryHistory = [newLaunchPos];
-            alert("Coordenadas de misión actualizadas en el mapa 3D.");
+                if (res.ok) {
+                    // Actualización local en CesiumJS
+                    const newLaunchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
+                    const newTargetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
+
+                    launchPadEntity.position = newLaunchPos;
+                    impactEntity.position = newTargetPos;
+                    trajectoryHistory = [newLaunchPos];
+
+                    alert("Coordenadas actualizadas exitosamente en el servidor y en el visor 3D.");
+                } else {
+                    alert("Error en el servidor al actualizar coordenadas.");
+                }
+            } catch (err) {
+                alert("Error de conexión al enviar coordenadas al backend.");
+            }
         }
 
         initViewer();

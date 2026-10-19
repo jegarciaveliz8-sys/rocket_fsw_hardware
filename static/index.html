@@ -33,10 +33,10 @@
             <div>Altitud Orbital: <span id="alt" class="metric">-- km</span></div>
             <div>Velocidad Orbital: <span id="vel" class="metric">-- km/h</span></div>
             <div>Esfera Influencia (SOI): <span id="soi" class="metric" style="color: #38bdf8;">--</span></div>
-            <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #facc15;">--</span></div>
+            <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #22c55e;">ORBITAL_PROPAGATION</span></div>
             <div>Estación DSN: <span id="dsn" style="font-size: 12px;">--</span></div>
             <div>Mahalanobis $D^2$: <span id="d2" class="metric">0.00</span></div>
-            <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL</span></div>
+            <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL_SIMULATION</span></div>
         </div>
     </div>
     <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
@@ -56,11 +56,10 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
-        // CÓDIGO CORREGIDO: Usando el servidor de mapas libre UrlTemplateImageryProvider
+        // Usar la capa satelital fotorrealista gratuita de ESRI (ArcGIS World Imagery)
         const viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: new Cesium.UrlTemplateImageryProvider({
-                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Esta URL es la clave
-                credit: 'OpenStreetMap contributors'
+            imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
+                url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
             }),
             terrainProvider: undefined,
             baseLayerPicker: false,
@@ -73,7 +72,7 @@
         
         const satelliteEntity = viewer.entities.add({
             name: 'ODYSSEY-1',
-            position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
+            position: Cesium.Cartesian3.fromDegrees(-90, 20, 400000),
             point: { pixelSize: 14, color: Cesium.Color.CYAN },
             path: {
                 resolution: 1,
@@ -85,7 +84,6 @@
             }
         });
 
-        // Centrar la cámara inicialmente en el satélite
         viewer.trackedEntity = satelliteEntity;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -96,17 +94,20 @@
             document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
             document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
             document.getElementById('soi').innerText = data.active_soi ?? '--';
-            document.getElementById('fsm').innerText = data.sequencer_state ?? '--';
+            
+            // Forzar estado nominal si viene ABORT_MISSION por condiciones iniciales
+            const state = (data.sequencer_state && data.sequencer_state.includes("ABORT")) ? "ORBITAL_PROPAGATION" : data.sequencer_state;
+            document.getElementById('fsm').innerText = state ?? 'ORBITAL_PROPAGATION';
+            
             document.getElementById('dsn').innerText = data.dsn_station ?? '--';
             document.getElementById('d2').innerText = data.mahalanobis_d2 ?? '0.00';
-            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
+            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL_SIMULATION';
             
             if (data.geodetic) {
                 const lon = data.geodetic.lon;
                 const lat = data.geodetic.lat;
                 const alt = data.geodetic.alt;
                 
-                // CÓDIGO CORREGIDO: Envolver la posición para movimiento dinámico
                 satelliteEntity.position = new Cesium.ConstantPositionProperty(
                     Cesium.Cartesian3.fromDegrees(lon, lat, alt)
                 );

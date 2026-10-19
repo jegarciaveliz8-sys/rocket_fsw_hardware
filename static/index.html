@@ -56,8 +56,12 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
-        // Usar la capa nativa estándar de imágenes de Bing/ArcGIS integrada sin requerir fichas de pago ni tokens
+        // CÓDIGO CORREGIDO: Usando el servidor de mapas libre UrlTemplateImageryProvider
         const viewer = new Cesium.Viewer('cesiumContainer', {
+            imageryProvider: new Cesium.UrlTemplateImageryProvider({
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Esta URL es la clave
+                credit: 'OpenStreetMap contributors'
+            }),
             terrainProvider: undefined,
             baseLayerPicker: false,
             geocoder: false,
@@ -81,6 +85,7 @@
             }
         });
 
+        // Centrar la cámara inicialmente en el satélite
         viewer.trackedEntity = satelliteEntity;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -101,6 +106,7 @@
                 const lat = data.geodetic.lat;
                 const alt = data.geodetic.alt;
                 
+                // CÓDIGO CORREGIDO: Envolver la posición para movimiento dinámico
                 satelliteEntity.position = new Cesium.ConstantPositionProperty(
                     Cesium.Cartesian3.fromDegrees(lon, lat, alt)
                 );

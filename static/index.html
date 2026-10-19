@@ -70,16 +70,19 @@
         const satelliteEntity = viewer.entities.add({
             name: 'ODYSSEY-1',
             position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
-            point: { pixelSize: 10, color: Cesium.Color.CYAN },
+            point: { pixelSize: 12, color: Cesium.Color.CYAN },
             path: {
                 resolution: 1,
                 material: new Cesium.PolylineGlowMaterialProperty({
-                    glowPower: 0.1,
+                    glowPower: 0.2,
                     color: Cesium.Color.YELLOW
                 }),
-                width: 2
+                width: 3
             }
         });
+
+        // FORZAR A LA CÁMARA A SEGUIR EL SATÉLITE AUTOMÁTICAMENTE
+        viewer.trackedEntity = satelliteEntity;
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);

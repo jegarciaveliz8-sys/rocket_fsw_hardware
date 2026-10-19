@@ -58,6 +58,10 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
         let currentBurnPlan = null;
+        
+        // Historial dinámico de puntos para que la línea "camine"
+        const launchPadCartesian = Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 0);
+        let trajectoryHistory = [launchPadCartesian];
 
         async function initViewer() {
             const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -80,10 +84,11 @@
                 console.warn("No se pudo cargar ESRI imagery", e);
             }
 
-            const launchPadEntity = viewer.entities.add({
+            // 1. PAD DE SALIDA
+            viewer.entities.add({
                 name: 'Punto de Salida (Launch Pad)',
-                position: Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 0),
-                point: { pixelSize: 10, color: Cesium.Color.ORANGE },
+                position: launchPadCartesian,
+                point: { pixelSize: 12, color: Cesium.Color.ORANGE },
                 label: {
                     text: 'PAD DE SALIDA',
                     font: '12pt monospace',
@@ -94,20 +99,27 @@
                 }
             });
 
+            // 2. MODELO DE COHETE / MISIL 3D (Representación de cono apuntando)
             const satelliteEntity = viewer.entities.add({
                 name: 'ODYSSEY-1',
-                position: Cesium.Cartesian3.fromDegrees(0, 0, 400000),
-                point: { pixelSize: 14, color: Cesium.Color.CYAN },
-                path: {
-                    resolution: 1,
-                    material: new Cesium.PolylineGlowMaterialProperty({
-                        glowPower: 0.3,
-                        color: Cesium.Color.YELLOW
-                    }),
-                    width: 3
+                position: Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 400000),
+                cylinder: {
+                    length: 40000.0,
+                    topRadius: 0.0,
+                    bottomRadius: 10000.0,
+                    material: Cesium.Color.CYAN
+                },
+                label: {
+                    text: '🚀 ODYSSEY-1',
+                    font: '12pt monospace',
+                    fillColor: Cesium.Color.CYAN,
+                    outlineColor: Cesium.Color.BLACK,
+                    outlineWidth: 2,
+                    pixelOffset: new Cesium.Cartesian2(0, -30)
                 }
             });
 
+            // 3. ZONA DE IMPACTO / EXPLOSIÓN
             const impactEntity = viewer.entities.add({
                 name: 'Zona de Impacto / Detonación',
                 position: Cesium.Cartesian3.fromDegrees(15.0, 30.0, 0),
@@ -126,6 +138,19 @@
                     material: Cesium.Color.RED.withAlpha(0.3),
                     outline: true,
                     outlineColor: Cesium.Color.RED
+                }
+            });
+
+            // 4. LÍNEA CAMINANTE DE TRAYECTORIA (Polyline dinámico)
+            viewer.entities.add({
+                name: 'Estela de Trayectoria',
+                polyline: {
+                    positions: new Cesium.CallbackProperty(() => trajectoryHistory, false),
+                    width: 4,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        glowPower: 0.2,
+                        color: Cesium.Color.YELLOW
+                    })
                 }
             });
 
@@ -152,9 +177,16 @@
                     const lat = data.geodetic.lat;
                     const alt = data.geodetic.alt;
                     
-                    satelliteEntity.position = new Cesium.ConstantPositionProperty(
-                        Cesium.Cartesian3.fromDegrees(lon, lat, alt)
-                    );
+                    const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+                    
+                    // Actualizar posición de la nave
+                    satelliteEntity.position = new Cesium.ConstantPositionProperty(newPos);
+
+                    // Agregar el nuevo punto para que la línea camine
+                    if (trajectoryHistory.length > 500) {
+                        trajectoryHistory.shift(); // Evitar consumo excesivo de memoria acumulando demasiados puntos
+                    }
+                    trajectoryHistory.push(newPos);
 
                     if (state && state.includes("ABORT")) {
                         impactEntity.position = Cesium.ConstantPositionProperty.fromValue(

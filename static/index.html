@@ -13,9 +13,10 @@
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
         #cesiumContainer { width: 100%; height: 380px; border-radius: 4px; overflow: hidden; position: relative; }
         .metric { font-size: 16px; font-weight: bold; color: #f3f4f6; margin: 4px 0; }
-        textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; }
+        textarea, input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 6px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; }
+        label { font-size: 11px; color: #38bdf8; display: block; margin-top: 4px; }
         button { background: #0284c7; color: #fff; border: none; padding: 8px; margin-top: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
-        pre { background: #020617; padding: 6px; font-size: 11px; color: #34d399; max-height: 100px; overflow-y: auto; }
+        pre { background: #020617; padding: 6px; font-size: 11px; color: #34d399; max-height: 90px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -41,10 +42,18 @@
     </div>
     <div class="layout" style="margin-top: 15px; grid-template-columns: 1fr 1fr;">
         <div class="panel">
-            <h3>🤖 Copiloto IA de Vuelo (Gemini RAG)</h3>
-            <textarea id="ai-query" rows="2" placeholder="Ej: Analiza las perturbaciones lunisolares en el sistema N-Cuerpos."></textarea>
-            <button onclick="sendAI()">Consultar Copiloto</button>
-            <pre id="ai-res">Esperando comandos...</pre>
+            <h3>🎯 Configuración de Coordenadas de Misión</h3>
+            <label>Pad de Salida (Lat, Lon):</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="pad-lat" value="28.572" placeholder="Lat">
+                <input type="number" id="pad-lon" value="-80.604" placeholder="Lon">
+            </div>
+            <label>Destino / Zona de Impacto (Lat, Lon):</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="target-lat" value="30.0" placeholder="Lat">
+                <input type="number" id="target-lon" value="15.0" placeholder="Lon">
+            </div>
+            <button onclick="updateMissionCoordinates()" style="background: #0284c7;">Actualizar Posiciones en Mapa</button>
         </div>
         <div class="panel">
             <h3>📐 Maniobra Orbital ($\Delta v$) & TC Uplink</h3>
@@ -58,13 +67,11 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
         let currentBurnPlan = null;
-        
-        // Historial dinámico de puntos para que la línea "camine"
-        const launchPadCartesian = Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 0);
-        let trajectoryHistory = [launchPadCartesian];
+        let viewer, launchPadEntity, impactEntity, satelliteEntity;
+        let trajectoryHistory = [];
 
         async function initViewer() {
-            const viewer = new Cesium.Viewer('cesiumContainer', {
+            viewer = new Cesium.Viewer('cesiumContainer', {
                 terrainProvider: undefined,
                 baseLayerPicker: true,
                 geocoder: true,
@@ -84,14 +91,24 @@
                 console.warn("No se pudo cargar ESRI imagery", e);
             }
 
+            const pLat = parseFloat(document.getElementById('pad-lat').value);
+            const pLon = parseFloat(document.getElementById('pad-lon').value);
+            const tLat = parseFloat(document.getElementById('target-lat').value);
+            const tLon = parseFloat(document.getElementById('target-lon').value);
+
+            const launchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
+            const targetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
+
+            trajectoryHistory = [launchPos];
+
             // 1. PAD DE SALIDA
-            viewer.entities.add({
-                name: 'Punto de Salida (Launch Pad)',
-                position: launchPadCartesian,
+            launchPadEntity = viewer.entities.add({
+                name: 'Punto de Salida',
+                position: launchPos,
                 point: { pixelSize: 12, color: Cesium.Color.ORANGE },
                 label: {
                     text: 'PAD DE SALIDA',
-                    font: '12pt monospace',
+                    font: '11pt monospace',
                     fillColor: Cesium.Color.ORANGE,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 2,
@@ -99,19 +116,19 @@
                 }
             });
 
-            // 2. MODELO DE COHETE / MISIL 3D (Representación de cono apuntando)
-            const satelliteEntity = viewer.entities.add({
+            // 2. VEHÍCULO / MISIL 3D
+            satelliteEntity = viewer.entities.add({
                 name: 'ODYSSEY-1',
-                position: Cesium.Cartesian3.fromDegrees(-80.604, 28.572, 400000),
+                position: launchPos,
                 cylinder: {
-                    length: 40000.0,
+                    length: 30000.0,
                     topRadius: 0.0,
-                    bottomRadius: 10000.0,
+                    bottomRadius: 8000.0,
                     material: Cesium.Color.CYAN
                 },
                 label: {
                     text: '🚀 ODYSSEY-1',
-                    font: '12pt monospace',
+                    font: '11pt monospace',
                     fillColor: Cesium.Color.CYAN,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 2,
@@ -119,13 +136,13 @@
                 }
             });
 
-            // 3. ZONA DE IMPACTO / EXPLOSIÓN
-            const impactEntity = viewer.entities.add({
-                name: 'Zona de Impacto / Detonación',
-                position: Cesium.Cartesian3.fromDegrees(15.0, 30.0, 0),
+            // 3. ZONA DE IMPACTO / DESTINO
+            impactEntity = viewer.entities.add({
+                name: 'Zona de Destino / Impacto',
+                position: targetPos,
                 point: { pixelSize: 14, color: Cesium.Color.RED },
                 label: {
-                    text: '⚠️ ZONA DE IMPACTO / EXPLOSIÓN',
+                    text: '🎯 ZONA DE DESTINO / IMPACTO',
                     font: '11pt monospace',
                     fillColor: Cesium.Color.RED,
                     outlineColor: Cesium.Color.BLACK,
@@ -133,15 +150,15 @@
                     pixelOffset: new Cesium.Cartesian2(0, -25)
                 },
                 ellipse: {
-                    semiMajorAxis: 50000.0,
-                    semiMinorAxis: 50000.0,
+                    semiMajorAxis: 40000.0,
+                    semiMinorAxis: 40000.0,
                     material: Cesium.Color.RED.withAlpha(0.3),
                     outline: true,
                     outlineColor: Cesium.Color.RED
                 }
             });
 
-            // 4. LÍNEA CAMINANTE DE TRAYECTORIA (Polyline dinámico)
+            // 4. LÍNEA CAMINANTE DE TRAYECTORIA
             viewer.entities.add({
                 name: 'Estela de Trayectoria',
                 polyline: {
@@ -178,38 +195,31 @@
                     const alt = data.geodetic.alt;
                     
                     const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
-                    
-                    // Actualizar posición de la nave
                     satelliteEntity.position = new Cesium.ConstantPositionProperty(newPos);
 
-                    // Agregar el nuevo punto para que la línea camine
-                    if (trajectoryHistory.length > 500) {
-                        trajectoryHistory.shift(); // Evitar consumo excesivo de memoria acumulando demasiados puntos
-                    }
+                    if (trajectoryHistory.length > 500) trajectoryHistory.shift();
                     trajectoryHistory.push(newPos);
-
-                    if (state && state.includes("ABORT")) {
-                        impactEntity.position = Cesium.ConstantPositionProperty.fromValue(
-                            Cesium.Cartesian3.fromDegrees(lon + 2.0, lat + 1.0, 0)
-                        );
-                    }
                 }
             };
         }
 
-        initViewer();
+        function updateMissionCoordinates() {
+            const pLat = parseFloat(document.getElementById('pad-lat').value);
+            const pLon = parseFloat(document.getElementById('pad-lon').value);
+            const tLat = parseFloat(document.getElementById('target-lat').value);
+            const tLon = parseFloat(document.getElementById('target-lon').value);
 
-        async function sendAI() {
-            const q = document.getElementById('ai-query').value;
-            document.getElementById('ai-res').innerText = "Procesando...";
-            try {
-                const res = await fetch('/api/ai/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query: q}) });
-                const j = await res.json();
-                document.getElementById('ai-res').innerText = j.response;
-            } catch (err) {
-                document.getElementById('ai-res').innerText = "Error de conexión con el copiloto.";
-            }
+            const newLaunchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
+            const newTargetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
+
+            launchPadEntity.position = newLaunchPos;
+            impactEntity.position = newTargetPos;
+            
+            trajectoryHistory = [newLaunchPos];
+            alert("Coordenadas de misión actualizadas en el mapa 3D.");
         }
+
+        initViewer();
 
         async function calcBurn() {
             const alt = parseFloat(document.getElementById('target-alt').value);
@@ -230,7 +240,6 @@
             const uplinkStatus = document.getElementById('uplink-res');
             uplinkStatus.style.display = 'block';
             uplinkStatus.innerText = "Transmitiendo paquete TC Uplink vía DSN...";
-            
             setTimeout(() => {
                 uplinkStatus.innerText = "✅ TC UPLINK TRANSMITIDO CON ÉXITO\nVector dv inyectado en la OBC de ODYSSEY-1.";
             }, 1200);

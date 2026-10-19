@@ -56,12 +56,8 @@
     <script>
         Cesium.Ion.defaultAccessToken = '';
 
-        // Proveedor de mapa abierto con plantilla de teselas directa de OpenStreetMap
+        // Usar la capa nativa estándar de imágenes de Bing/ArcGIS integrada sin requerir fichas de pago ni tokens
         const viewer = new Cesium.Viewer('cesiumContainer', {
-            imageryProvider: new Cesium.UrlTemplateImageryProvider({
-                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                credit: 'OpenStreetMap contributors'
-            }),
             terrainProvider: undefined,
             baseLayerPicker: false,
             geocoder: false,
@@ -105,7 +101,6 @@
                 const lat = data.geodetic.lat;
                 const alt = data.geodetic.alt;
                 
-                // Asignación con ConstantPositionProperty para redibujado en tiempo real
                 satelliteEntity.position = new Cesium.ConstantPositionProperty(
                     Cesium.Cartesian3.fromDegrees(lon, lat, alt)
                 );

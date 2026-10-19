@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 import physics_engine
@@ -27,11 +27,10 @@ sequencer = FlightSequencer()
 swarm = SwarmConstellationManager()
 hil = HardwareInTheLoopBridge()
 
-# Inicialización nominal a ~400 km de altitud para evitar falsos positivos de aborto LES
 R_earth = 6378137.0
 init_alt = 400000.0
 r_init = R_earth + init_alt
-v_init = np.sqrt(3.986004418e14 / r_init) # Velocidad circular LEO
+v_init = np.sqrt(3.986004418e14 / r_init)
 state_real = np.array([r_init, 0.0, 0.0, 0.0, v_init, 0.0])
 
 mass = 50000.0
@@ -39,6 +38,7 @@ cd = 0.3
 area = 10.0
 sim_time_sec = 0
 
+# Montaje estático con control anti-caché para forzar lectura fresca del disco
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -46,7 +46,9 @@ if os.path.exists("static"):
 async def get_index():
     if os.path.exists("static/index.html"):
         with open("static/index.html", "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+        # Retorna el HTML con cabeceras para que el navegador JAMÁS lo guarde en caché
+        return Response(content=content, media_type="text/html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
     return "<h1>ODYSSEY-1 Full MCC Backend Operational</h1>"
 
 class AIQuery(BaseModel):
@@ -143,8 +145,7 @@ async def websocket_telemetry(websocket: WebSocket):
             dsn_station, dsn_elevation = dsn_network.calculate_active_dsn_station(pos, sim_time_sec)
             fdir_action, d_mahalanobis = fdir.evaluate_mahalanobis(residual, S_cov)
             
-            # Conversión ECI a ECEF considerando la rotación de la Tierra (omega_earth * t)
-            omega_e = 7.292115e-5 # rad/s
+            omega_e = 7.292115e-5
             theta = omega_e * sim_time_sec
             cos_t, sin_t = np.cos(theta), np.sin(theta)
             
@@ -152,7 +153,6 @@ async def websocket_telemetry(websocket: WebSocket):
             y_ecef = -pos[0] * sin_t + pos[1] * cos_t
             z_ecef = pos[2]
             
-            # Cálculo de Latitud, Longitud y Altitud geodésica aproximada para Cesium
             r_xy = np.sqrt(x_ecef**2 + y_ecef**2)
             lat = np.arctan2(z_ecef, r_xy) * 180.0 / np.pi
             lon = np.arctan2(y_ecef, x_ecef) * 180.0 / np.pi

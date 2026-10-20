@@ -118,7 +118,7 @@
             return (crc ^ (-1)) >>> 0;
         }
 
-        let map, padMarker, targetMarker, vesselMarker, trajectoryPolyline;
+        let map = null, padMarker = null, targetMarker = null, vesselMarker = null, trajectoryPolyline = null;
         let trajectoryCoords = [];
         let loadedLogs = [];
         let autoFollow = false;
@@ -156,6 +156,7 @@
         }
 
         function initMap() {
+            if (map) return; // Ya inicializado
             const pLat = parseFloat(document.getElementById('pad-lat').value);
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
@@ -176,6 +177,7 @@
         }
 
         function setCamMode(mode) {
+            if (!map) initMap();
             const pLat = parseFloat(document.getElementById('pad-lat').value);
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
@@ -224,17 +226,19 @@
                 telemetryChart.update();
             }
 
-            if (data.geodetic && map) {
+            if (data.geodetic) {
                 const lat = data.geodetic.lat;
                 const lon = data.geodetic.lon;
 
-                vesselMarker.setLatLng([lat, lon]);
-                trajectoryCoords.push([lat, lon]);
-                if (trajectoryCoords.length > 300) trajectoryCoords.shift();
-                trajectoryPolyline.setLatLngs(trajectoryCoords);
+                if (map && vesselMarker) {
+                    vesselMarker.setLatLng([lat, lon]);
+                    trajectoryCoords.push([lat, lon]);
+                    if (trajectoryCoords.length > 300) trajectoryCoords.shift();
+                    trajectoryPolyline.setLatLngs(trajectoryCoords);
 
-                if (autoFollow) {
-                    map.panTo([lat, lon]);
+                    if (autoFollow) {
+                        map.panTo([lat, lon]);
+                    }
                 }
 
                 const tLat = parseFloat(document.getElementById('target-lat').value);
@@ -257,11 +261,15 @@
                 });
                 if (!res.ok) throw new Error("Error HTTP " + res.status);
 
-                padMarker.setLatLng([pLat, pLon]);
-                targetMarker.setLatLng([tLat, tLon]);
-                vesselMarker.setLatLng([pLat, pLon]);
-                trajectoryCoords = [[pLat, pLon]];
-                trajectoryPolyline.setLatLngs(trajectoryCoords);
+                if (!map) {
+                    initMap();
+                } else {
+                    if (padMarker) padMarker.setLatLng([pLat, pLon]);
+                    if (targetMarker) targetMarker.setLatLng([tLat, tLon]);
+                    if (vesselMarker) vesselMarker.setLatLng([pLat, pLon]);
+                    trajectoryCoords = [[pLat, pLon]];
+                    if (trajectoryPolyline) trajectoryPolyline.setLatLngs(trajectoryCoords);
+                }
 
                 setCamMode('tactical');
                 alert("✅ Ruta sincronizada e inyectada correctamente.");
@@ -364,7 +372,7 @@
         }
 
         window.onload = function() {
-            initMap();
+            setTimeout(initMap, 200);
         };
     </script>
 </body>

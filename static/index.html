@@ -162,10 +162,15 @@
             const tLat = parseFloat(document.getElementById('target-lat').value);
             const tLon = parseFloat(document.getElementById('target-lon').value);
 
-            map = L.map('mapContainer').setView([(pLat + tLat)/2, (pLon + tLon)/2], 10);
+            map = L.map('mapContainer', {
+                maxZoom: 21
+            }).setView([(pLat + tLat)/2, (pLon + tLon)/2], 10);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap'
+            // Capa Satelital HD (Esri World Imagery) para ver calles, casas y terrenos reales
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 21,
+                maxNativeZoom: 19,
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
             }).addTo(map);
 
             padMarker = L.circleMarker([pLat, pLon], { color: 'orange', radius: 8, fillColor: 'orange', fillOpacity: 0.8 }).addTo(map).bindPopup("Pad de Salida");

@@ -160,7 +160,7 @@ async def field_assistant(req: AssistantRequest):
         Responde de manera técnica, profesional y concisa utilizando terminología aeroespacial.
         """
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=context_prompt,
         )
         return {"response": response.text}

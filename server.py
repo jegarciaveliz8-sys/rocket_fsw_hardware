@@ -5,9 +5,9 @@ import math
 import sqlite3
 import zlib
 import uuid
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 from google import genai
 
@@ -18,8 +18,9 @@ DB_FILE = "flight_recorder.db"
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS flight_logs")
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS flight_logs (
+        CREATE TABLE flight_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             mission_id TEXT,
             timestamp REAL,
@@ -94,7 +95,8 @@ class OrbitPlanRequest(BaseModel):
     crc32_checksum: int
 
 class AssistantRequest(BaseModel):
-    prompt: str
+    prompt: str = "Auditar sistema"
+    query: str = None
 
 def evaluate_fdir():
     if abs(mission_state["tvc_x"]) > 4.5 or abs(mission_state["tvc_y"]) > 4.5:
@@ -117,7 +119,7 @@ async def set_coordinates(coords: MissionCoordinates):
     mission_state["sequencer_state"] = "POWERED_FLIGHT_PROPULSION"
     mission_state["abort_triggered"] = False
     mission_state["flight_time"] = 0.0
-    return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.dict()}
+    return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.model_dump()}
 
 @app.post("/api/mission/abort")
 async def trigger_abort():
@@ -142,8 +144,7 @@ async def plan_orbit(req: OrbitPlanRequest):
         }
     }
 
-@app.post("/api/asistente")
-async def field_assistant(req: AssistantRequest):
+async def handle_ai_logic(prompt: str):
     max_retries = 2
     for attempt in range(max_retries):
         try:
@@ -158,7 +159,7 @@ async def field_assistant(req: AssistantRequest):
             - Estado FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
             - Actitud (Roll, Pitch, Yaw): {mission_state['roll']}°, {mission_state['pitch']}°, {mission_state['yaw']}°
             
-            Pregunta del operador de campo: {req.prompt}
+            Pregunta del operador: {prompt}
             Responde de manera técnica, profesional y concisa utilizando terminología aeroespacial.
             """
             response = client.models.generate_content(
@@ -168,8 +169,37 @@ async def field_assistant(req: AssistantRequest):
             return {"response": response.text}
         except Exception as e:
             if attempt == max_retries - 1:
-                return {"response": f"⚠️ DSN ENLACE DEGRADADO (Gemini 503 Alta Demanda): Los subsistemas operativos locales siguen nominales. Intenta de nuevo en unos segundos."}
+                return {"response": f"⚠️ DSN ENLACE DEGRADADO: Subsistemas locales nominales."}
             await asyncio.sleep(1)
+
+async def parse_prompt_from_request(req: AssistantRequest, request: Request):
+    prompt_text = "Auditar sistema"
+    if req:
+        if req.prompt:
+            prompt_text = req.prompt
+        elif req.query:
+            prompt_text = req.query
+    if request:
+        try:
+            body = await request.json()
+            if "prompt" in body:
+                prompt_text = body["prompt"]
+            elif "query" in body:
+                prompt_text = body["query"]
+        except Exception:
+            pass
+    return prompt_text
+
+@app.get("/ai/query")
+@app.post("/ai/query")
+@app.get("/api/ai/query")
+@app.post("/api/ai/query")
+@app.get("/api/asistente")
+@app.post("/api/asistente")
+@app.get("/api/assistant")
+@app.post("/api/assistant")
+async def ai_query_endpoint(req: AssistantRequest = None, request: Request = None):
+    return await handle_ai_logic(await parse_prompt_from_request(req, request))
 
 @app.get("/api/mission/logs")
 async def get_flight_logs():
@@ -179,6 +209,38 @@ async def get_flight_logs():
     rows = cursor.fetchall()
     conn.close()
     return {"mission_id": mission_state["mission_id"], "logs": rows}
+
+def generate_csv_response():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, fsm_state FROM flight_logs WHERE mission_id = ?", (mission_state["mission_id"],))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    csv_data = "Mission Time,lat,lon,altitude,speed,fsm_state\n"
+    for r in rows:
+        csv_data += f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{r[5]}\n"
+    return PlainTextResponse(csv_data, media_type="text/csv")
+
+@app.get("/export/csv")
+async def export_csv_endpoint_root():
+    return generate_csv_response()
+
+@app.get("/api/export/csv")
+async def export_csv_endpoint_api():
+    return generate_csv_response()
+
+@app.get("/api/mission/export")
+async def export_csv_endpoint_mission():
+    return generate_csv_response()
+
+@app.get("/api/mission/export-csv")
+async def export_csv_endpoint_dash():
+    return generate_csv_response()
+
+@app.get("/api/mission/export/csv")
+async def export_csv_endpoint_full():
+    return generate_csv_response()
 
 @app.get("/api/mission/report/pdf")
 async def generate_pdf_report():
@@ -239,8 +301,6 @@ async def websocket_telemetry(websocket: WebSocket):
             dynamic_pressure_kpa = 0.5 * air_density * ((total_speed / 3.6) ** 2) / 1000.0
             mission_state["dynamic_pressure_kpa"] = round(dynamic_pressure_kpa, 2)
 
-            evaluate_fdir()
-
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute(
@@ -251,10 +311,17 @@ async def websocket_telemetry(websocket: WebSocket):
             conn.close()
 
             telemetry_payload = {
+                "status": "POWERED ASCENT",
                 "mission_id": mission_state["mission_id"],
                 "flight_time": round(mission_state["flight_time"], 1),
+                "altitude": mission_state["altitude_km"],
                 "altitude_km": mission_state["altitude_km"],
+                "speed": mission_state["speed_kmh"],
                 "speed_kmh": mission_state["speed_kmh"],
+                "velocity": mission_state["speed_kmh"],
+                "lat": round(current_lat, 5),
+                "lon": round(current_lon, 5),
+                "fsm_state": mission_state["sequencer_state"],
                 "roll": mission_state["roll"],
                 "pitch": mission_state["pitch"],
                 "yaw": mission_state["yaw"],

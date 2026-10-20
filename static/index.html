@@ -14,7 +14,7 @@
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
         #mapContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; cursor: crosshair; }
         .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
-        input, select { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; font-family: monospace; }
+        input, select, textarea { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; font-family: monospace; }
         label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
         button { background: #0284c7; color: #fff; border: none; padding: 6px; margin-top: 4px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background: #0369a1; }
@@ -68,16 +68,24 @@
         </div>
     </div>
 
-    <div class="panel" style="margin-top: 10px;">
-        <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
-        <div style="height: 140px; width: 100%;">
-            <canvas id="telemetryChart"></canvas>
+    <div class="layout" style="margin-top: 10px;">
+        <div class="panel">
+            <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
+            <div style="height: 140px; width: 100%;">
+                <canvas id="telemetryChart"></canvas>
+            </div>
+        </div>
+        <div class="panel">
+            <h3>🤖 Asistente IA de Campo (Gemini FSW Uplink)</h3>
+            <textarea id="ai-prompt" rows="2" placeholder="Escribe una consulta de campo o auditoría IA..."></textarea>
+            <button onclick="queryFieldAI()" style="background: #8b5cf6;">Enviar Consulta a IA</button>
+            <pre id="ai-response" style="margin-top: 4px; max-height: 50px;">IA en standby...</pre>
         </div>
     </div>
 
     <div class="layout" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
         <div class="panel">
-            <h3>🎯 Configuración de Misión & Objetivos Directos</h3>
+            <h3>🎯 Configuración de Misión & Objetivos</h3>
             
             <label>Selección Directa (Origen):</label>
             <select id="preset-pad" onchange="loadPadPreset(this.value)">
@@ -231,18 +239,15 @@
             trajectoryCoords = [[pLat, pLon]];
             trajectoryPolyline = L.polyline(trajectoryCoords, { color: '#f59e0b', weight: 4 }).addTo(map);
 
-            // SELECCIÓN DIRECTA AUTOMÁTICA POR CLIC EN EL MAPA SATELITAL
             map.on('click', function(e) {
                 const clickLat = e.latlng.lat.toFixed(6);
                 const clickLon = e.latlng.lng.toFixed(6);
 
                 if (e.originalEvent.shiftKey) {
-                    // Shift + Clic = Asignar Pad de Salida
                     document.getElementById('pad-lat').value = clickLat;
                     document.getElementById('pad-lon').value = clickLon;
                     if (padMarker) padMarker.setLatLng([clickLat, clickLon]);
                 } else {
-                    // Clic Normal = Asignar Zona de Destino
                     document.getElementById('target-lat').value = clickLat;
                     document.getElementById('target-lon').value = clickLon;
                     if (targetMarker) targetMarker.setLatLng([clickLat, clickLon]);
@@ -267,6 +272,24 @@
             } else if (mode === 'global') {
                 autoFollow = false;
                 map.setView([15.0, -90.0], 6);
+            }
+        }
+
+        async function queryFieldAI() {
+            const promptText = document.getElementById('ai-prompt').value;
+            if (!promptText) return;
+            document.getElementById('ai-response').innerText = "Consultando a la IA...";
+            try {
+                const res = await fetch('/api/asistente', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+                if (!res.ok) throw new Error("Error HTTP " + res.status);
+                const data = await res.json();
+                document.getElementById('ai-response').innerText = data.response || JSON.stringify(data);
+            } catch (err) {
+                document.getElementById('ai-response').innerText = "❌ Error IA: " + err.message;
             }
         }
 

@@ -10,15 +10,16 @@
         body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 12px; }
         header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
-        .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
-        .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
+        .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; margin-bottom: 10px; }
+        .layout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+        .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; box-sizing: border-box; }
         #mapContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; cursor: crosshair; }
         .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
         input, select, textarea { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; font-family: monospace; }
         label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
         button { background: #0284c7; color: #fff; border: none; padding: 6px; margin-top: 4px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background: #0369a1; }
-        pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 60px; overflow-y: auto; margin-top: 4px; }
+        pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 80px; overflow-y: auto; margin-top: 4px; }
         .cam-controls { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); padding: 5px; border-radius: 4px; border: 1px solid #00ffcc; }
         .cam-controls button { width: auto; padding: 3px 6px; font-size: 9px; margin-right: 3px; display: inline-block; background: #0284c7; }
         .map-hint { position: absolute; bottom: 8px; right: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); color: #38bdf8; padding: 3px 6px; border-radius: 3px; font-size: 9px; border: 1px solid #38bdf8; pointer-events: none; }
@@ -35,6 +36,7 @@
         <h1>🚀 ODYSSEY-1 | ADVANCED FLIGHT SOFTWARE & MCC</h1>
         <div id="status" style="color: #00ffcc;">● TELEMETRY LINK: ACTIVE</div>
     </header>
+
     <div class="layout">
         <div class="panel" style="position: relative;">
             <h3>🌐 Visualización Geoespacial (Mapa Táctico HD Satelital)</h3>
@@ -68,7 +70,7 @@
         </div>
     </div>
 
-    <div class="layout" style="margin-top: 10px;">
+    <div class="layout-dual">
         <div class="panel">
             <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
             <div style="height: 140px; width: 100%;">
@@ -77,16 +79,15 @@
         </div>
         <div class="panel">
             <h3>🤖 Asistente IA de Campo (Gemini FSW Uplink)</h3>
-            <textarea id="ai-prompt" rows="2" placeholder="Escribe una consulta de campo o auditoría IA..."></textarea>
+            <textarea id="ai-prompt" rows="2" placeholder="Escribe consulta de telemetría o auditoría..."></textarea>
             <button onclick="queryFieldAI()" style="background: #8b5cf6;">Enviar Consulta a IA</button>
-            <pre id="ai-response" style="margin-top: 4px; max-height: 50px;">IA en standby...</pre>
+            <pre id="ai-response">IA en standby...</pre>
         </div>
     </div>
 
-    <div class="layout" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
+    <div class="layout" style="grid-template-columns: 1fr 1fr 1fr;">
         <div class="panel">
             <h3>🎯 Configuración de Misión & Objetivos</h3>
-            
             <label>Selección Directa (Origen):</label>
             <select id="preset-pad" onchange="loadPadPreset(this.value)">
                 <option value="">-- Seleccionar Hotel / Origen --</option>
@@ -94,7 +95,6 @@
                 <option value="14.5578,-90.7295">Hotel Casa Santo Domingo (Antigua, GTM)</option>
                 <option value="9.9333,-84.0833">Hotel InterContinental (Costa Rica)</option>
             </select>
-
             <label>Pad Salida (Lat, Lon):</label>
             <input type="number" id="pad-lat" value="14.5975" step="any">
             <input type="number" id="pad-lon" value="-90.5131" step="any">
@@ -102,15 +102,13 @@
             <label>Selección Directa (Destino):</label>
             <select id="preset-target" onchange="loadTargetPreset(this.value)">
                 <option value="">-- Seleccionar Cuartel / Destino --</option>
-                <option value="13.7024,-89.2241">Comando de Ingenieros (El Salvador) [~174 km]</option>
-                <option value="12.1485,-86.2730">Cuartel General Ejército (Nicaragua) [~703 km]</option>
-                <option value="9.9325,-84.0800">Comando Fuerza Pública (Costa Rica) [~1003 km]</option>
+                <option value="13.7024,-89.2241">Comando de Ingenieros (El Salvador)</option>
+                <option value="12.1485,-86.2730">Cuartel General Ejército (Nicaragua)</option>
+                <option value="9.9325,-84.0800">Comando Fuerza Pública (Costa Rica)</option>
             </select>
-
             <label>Zona Destino (Lat, Lon):</label>
             <input type="number" id="target-lat" value="9.9325" step="any">
             <input type="number" id="target-lon" value="-84.0800" step="any">
-            
             <button onclick="updateMissionCoordinates()">⚡ Sincronizar Ruta</button>
         </div>
         
@@ -225,7 +223,6 @@
                 maxZoom: 21
             }).setView([(pLat + tLat)/2, (pLon + tLon)/2], 10);
 
-            // Capa Satelital HD (Esri World Imagery) para ver calles, casas y terrenos reales
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                 maxZoom: 21,
                 maxNativeZoom: 19,

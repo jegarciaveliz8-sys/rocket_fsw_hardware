@@ -86,7 +86,7 @@
         </div>
         <div class="panel">
             <h3>📐 Solucionador Δv & Uplink CRC32</h3>
-            <input type="number" id="target-alt" value="50" placeholder="Meta km">
+            <input type="number" id="target-alt" value="50" placeholder="Meta km" step="any">
             <button onclick="calcBurn()" style="background: #0d9488;">Calcular Δv</button>
             <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; display: none;">📡 ENVIAR UPLINK SEGURO</button>
             <pre id="burn-res">Standby</pre>
@@ -102,7 +102,6 @@
     </div>
 
     <script>
-        // Inicializar tabla CRC32 ANTES de cualquier función que la use
         let table = [];
         for (let i = 0; i < 256; i++) {
             let c = i;
@@ -280,13 +279,18 @@
         async function calcBurn() {
             try {
                 const alt = parseFloat(document.getElementById('target-alt').value);
-                const crc = computeCRC32(alt.toString());
+                const altFormatted = alt.toFixed(1);
+                const crc = computeCRC32(altFormatted);
+
                 const res = await fetch('/api/orbit/plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: crc })
+                    body: JSON.stringify({ target_altitude_km: parseFloat(altFormatted), crc32_checksum: crc })
                 });
-                if (!res.ok) throw new Error("Error HTTP " + res.status);
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error("Error HTTP " + res.status + " - " + JSON.stringify(errData));
+                }
                 const j = await res.json();
                 document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
                 document.getElementById('btn-uplink').style.display = 'block';
@@ -298,13 +302,18 @@
         async function sendUplink() {
             try {
                 const alt = parseFloat(document.getElementById('target-alt').value);
-                const crc = computeCRC32(alt.toString());
+                const altFormatted = alt.toFixed(1);
+                const crc = computeCRC32(altFormatted);
+
                 const res = await fetch('/api/orbit/plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: crc })
+                    body: JSON.stringify({ target_altitude_km: parseFloat(altFormatted), crc32_checksum: crc })
                 });
-                if (!res.ok) throw new Error("Error HTTP " + res.status);
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error("Error HTTP " + res.status + " - " + JSON.stringify(errData));
+                }
                 document.getElementById('uplink-res').style.display = 'block';
                 document.getElementById('uplink-res').innerText = `✅ TC UPLINK ACEPTADO (CRC32: ${crc})`;
             } catch (err) {

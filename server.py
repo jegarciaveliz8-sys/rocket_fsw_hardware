@@ -4,7 +4,6 @@ import asyncio
 import math
 import sqlite3
 import zlib
-import threading
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -121,10 +120,10 @@ async def trigger_abort():
 
 @app.post("/api/orbit/plan")
 async def plan_orbit(req: OrbitPlanRequest):
-    payload_bytes = f"{req.target_altitude_km}".encode('utf-8')
-    calculated_crc = zlib.crc32(payload_bytes) & 0xFFFFFFFF
+    payload_str = f"{req.target_altitude_km:.1f}"
+    calculated_crc = zlib.crc32(payload_str.encode('utf-8')) & 0xFFFFFFFF
     if req.crc32_checksum != calculated_crc:
-        raise HTTPException(status_code=400, detail="SECURITY_ALERT: CRC32 Checksum mismatch.")
+        raise HTTPException(status_code=400, detail=f"SECURITY_ALERT: CRC32 mismatch. Received {req.crc32_checksum}, expected {calculated_crc}")
     mission_state["target_altitude_km"] = req.target_altitude_km
     return {
         "status": "UPLINK_SECURE_ACCEPTED",

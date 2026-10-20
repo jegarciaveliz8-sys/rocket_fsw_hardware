@@ -12,7 +12,7 @@
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #cesiumContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #000; }
+        #cesiumContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; }
         .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
         input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 4px; box-sizing: border-box; border-radius: 4px; margin-bottom: 4px; font-family: monospace; }
         label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
@@ -119,7 +119,7 @@
         }
 
         Cesium.Ion.defaultAccessToken = '';
-        let viewer, launchPadEntity, impactEntity, satelliteEntity;
+        let viewer = null, launchPadEntity = null, impactEntity = null, satelliteEntity = null;
         let trajectoryHistory = [];
         let loadedLogs = [];
 
@@ -155,13 +155,23 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
-        async function initViewer() {
+        function initViewer() {
             try {
-                viewer = new Cesium.Viewer('cesiumContainer', {
-                    baseLayerPicker: false, geocoder: false, timeline: false, animation: false, sceneModePicker: false, navigationHelpButton: false
+                const osmProvider = new Cesium.UrlTemplateImageryProvider({
+                    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
                 });
-                viewer.imageryLayers.removeAll();
-                viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({ url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png' }));
+                
+                viewer = new Cesium.Viewer('cesiumContainer', {
+                    imageryProvider: osmProvider,
+                    baseLayerPicker: false,
+                    geocoder: false,
+                    timeline: false,
+                    animation: false,
+                    sceneModePicker: false,
+                    navigationHelpButton: false,
+                    infoBox: false,
+                    selectionIndicator: false
+                });
 
                 const pLat = parseFloat(document.getElementById('pad-lat').value);
                 const pLon = parseFloat(document.getElementById('pad-lon').value);
@@ -185,7 +195,8 @@
 
                 setCamMode('tactical');
             } catch (e) {
-                console.error("Error inicializando Cesium:", e);
+                console.warn("WebGL/Cesium no pudo inicializar el mapa 3D:", e);
+                document.getElementById('cesiumContainer').innerHTML = "<div style='color:#ef4444; padding:20px; text-align:center;'>⚠️ Visor 3D no compatible o aceleración WebGL desactivada en el navegador.<br><span style='color:#38bdf8;'>El resto de los controles y telemetría funcionan normalmente.</span></div>";
             }
         }
 
@@ -199,7 +210,7 @@
 
             if (mode === 'tactical') {
                 viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees((pLon+tLon)/2, (pLat+tLat)/2, 75000.0), duration: 1.0 });
-            } else if (mode === 'chase') {
+            } else if (mode === 'chase' && satelliteEntity) {
                 viewer.trackedEntity = satelliteEntity;
             } else if (mode === 'global') {
                 viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(-90.0, 15.0, 5000000.0), duration: 1.2 });
@@ -237,16 +248,18 @@
                 telemetryChart.update();
             }
 
-            if (data.geodetic && satelliteEntity) {
+            if (data.geodetic) {
                 const lat = data.geodetic.lat;
                 const lon = data.geodetic.lon;
                 const alt = data.geodetic.alt;
 
-                const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
-                satelliteEntity.position = new Cesium.ConstantPositionProperty(newPos);
+                if (viewer && satelliteEntity) {
+                    const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+                    satelliteEntity.position = new Cesium.ConstantPositionProperty(newPos);
 
-                if (trajectoryHistory.length > 250) trajectoryHistory.shift();
-                trajectoryHistory.push(newPos);
+                    if (trajectoryHistory.length > 250) trajectoryHistory.shift();
+                    trajectoryHistory.push(newPos);
+                }
 
                 const tLat = parseFloat(document.getElementById('target-lat').value);
                 const tLon = parseFloat(document.getElementById('target-lon').value);
@@ -268,8 +281,10 @@
                 });
                 if (!res.ok) throw new Error("Error HTTP " + res.status);
                 
-                trajectoryHistory = [Cesium.Cartesian3.fromDegrees(pLon, pLat, 0)];
-                setCamMode('tactical');
+                if (viewer) {
+                    trajectoryHistory = [Cesium.Cartesian3.fromDegrees(pLon, pLat, 0)];
+                    setCamMode('tactical');
+                }
                 alert("✅ Ruta sincronizada e inyectada correctamente.");
             } catch (err) {
                 alert("❌ Error al sincronizar ruta: " + err.message);
@@ -348,8 +363,10 @@
             document.getElementById('tvc-y').innerText = log[9] + "°";
             document.getElementById('fsm').innerText = log[10];
 
-            const pos = Cesium.Cartesian3.fromDegrees(log[2], log[1], log[3] * 1000.0);
-            satelliteEntity.position = new Cesium.ConstantPositionProperty(pos);
+            if (viewer && satelliteEntity) {
+                const pos = Cesium.Cartesian3.fromDegrees(log[2], log[1], log[3] * 1000.0);
+                satelliteEntity.position = new Cesium.ConstantPositionProperty(pos);
+            }
             document.getElementById('log-status').innerText = `DVR Frame ${index}/${loadedLogs.length - 1} (T+${log[0]}s)`;
         }
 
@@ -368,7 +385,9 @@
             }
         }
 
-        initViewer();
+        window.onload = function() {
+            initViewer();
+        };
     </script>
 </body>
 </html>

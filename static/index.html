@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | World-Class Aerospace MCC</title>
-    <script src="https://cdn.jsdelivr.com/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -156,7 +156,7 @@
         }
 
         function initMap() {
-            if (map) return; // Ya inicializado
+            if (map) return;
             const pLat = parseFloat(document.getElementById('pad-lat').value);
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
@@ -200,8 +200,12 @@
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
-            document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
+            
+            const altKm = Number(data.altitude_km ?? 0);
+            const speedKmh = Number(data.speed_kmh ?? 0);
+
+            document.getElementById('alt').innerText = altKm.toFixed(2) + " km";
+            document.getElementById('vel').innerText = speedKmh.toFixed(1) + " km/h";
             document.getElementById('att-roll').innerText = (data.roll ?? 0) + "°";
             document.getElementById('att-pitch').innerText = (data.pitch ?? 0) + "°";
             document.getElementById('att-yaw').innerText = (data.yaw ?? 0) + "°";
@@ -220,9 +224,9 @@
                     telemetryChart.data.datasets[0].data.shift();
                     telemetryChart.data.datasets[1].data.shift();
                 }
-                telemetryChart.data.labels.push(`T+${data.flight_time}s`);
-                telemetryChart.data.datasets[0].data.push(data.altitude_km);
-                telemetryChart.data.datasets[1].data.push(data.speed_kmh);
+                telemetryChart.data.labels.push(`T+${Math.floor(data.flight_time)}s`);
+                telemetryChart.data.datasets[0].data.push(altKm);
+                telemetryChart.data.datasets[1].data.push(speedKmh);
                 telemetryChart.update();
             }
 
@@ -230,10 +234,12 @@
                 const lat = data.geodetic.lat;
                 const lon = data.geodetic.lon;
 
+                if (!map) initMap();
+
                 if (map && vesselMarker) {
                     vesselMarker.setLatLng([lat, lon]);
                     trajectoryCoords.push([lat, lon]);
-                    if (trajectoryCoords.length > 300) trajectoryCoords.shift();
+                    if (trajectoryCoords.length > 400) trajectoryCoords.shift();
                     trajectoryPolyline.setLatLngs(trajectoryCoords);
 
                     if (autoFollow) {

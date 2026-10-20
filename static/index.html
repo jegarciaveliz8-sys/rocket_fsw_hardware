@@ -102,6 +102,23 @@
     </div>
 
     <script>
+        // Inicializar tabla CRC32 ANTES de cualquier función que la use
+        let table = [];
+        for (let i = 0; i < 256; i++) {
+            let c = i;
+            for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            table[i] = c;
+        }
+
+        function computeCRC32(str) {
+            let crc = 0 ^ (-1);
+            for (let i = 0; i < str.length; i++) {
+                let c = str.charCodeAt(i);
+                crc = (crc >>> 8) ^ table[(crc ^ c) & 0xFF];
+            }
+            return (crc ^ (-1)) >>> 0;
+        }
+
         Cesium.Ion.defaultAccessToken = '';
         let viewer, launchPadEntity, impactEntity, satelliteEntity;
         let trajectoryHistory = [];
@@ -128,21 +145,6 @@
                 plugins: { legend: { labels: { color: '#fff', font: { size: 10 } } } }
             }
         });
-
-        function computeCRC32(str) {
-            let crc = 0 ^ (-1);
-            for (let i = 0; i < str.length; i++) {
-                let c = str.charCodeAt(i);
-                crc = (crc >>> 8) ^ table[(crc ^ c) & 0xFF];
-            }
-            return (crc ^ (-1)) >>> 0;
-        }
-        let table = [];
-        for (let i = 0; i < 256; i++) {
-            let c = i;
-            for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-            table[i] = c;
-        }
 
         function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
             const R = 6371.0;
@@ -278,10 +280,11 @@
         async function calcBurn() {
             try {
                 const alt = parseFloat(document.getElementById('target-alt').value);
+                const crc = computeCRC32(alt.toString());
                 const res = await fetch('/api/orbit/plan', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: computeCRC32(alt.toString()) })
+                    body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: crc })
                 });
                 if (!res.ok) throw new Error("Error HTTP " + res.status);
                 const j = await res.json();

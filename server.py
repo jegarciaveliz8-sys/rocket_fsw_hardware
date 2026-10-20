@@ -88,6 +88,9 @@ class OrbitPlanRequest(BaseModel):
     target_altitude_km: float
     crc32_checksum: int
 
+class AssistantRequest(BaseModel):
+    prompt: str
+
 def evaluate_fdir():
     if abs(mission_state["tvc_x"]) > 4.5 or abs(mission_state["tvc_y"]) > 4.5:
         mission_state["fdir_status"] = "WARNING"
@@ -132,6 +135,15 @@ async def plan_orbit(req: OrbitPlanRequest):
             "target_altitude_km": req.target_altitude_km
         }
     }
+
+@app.post("/api/asistente")
+async def field_assistant(req: AssistantRequest):
+    query = req.prompt.lower()
+    if "estado" in query or "auditar" in query or "fdir" in query:
+        response_text = f"AUDITORÍA FSW: Estado FDIR actual es {mission_state['fdir_status']} ({mission_state['fdir_alert']}). Secuenciador en {mission_state['sequencer_state']} con altitud EKF de {mission_state['altitude_km']} km."
+    else:
+        response_text = f"UPLINK ASISTENTE IA: Consulta de campo recibida ('{req.prompt}'). Subsistemas nominales y enlace activo con DSN."
+    return {"response": response_text}
 
 @app.get("/api/mission/logs")
 async def get_flight_logs():

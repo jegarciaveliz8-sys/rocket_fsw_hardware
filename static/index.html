@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | High-Fidelity Tactical & Orbital MCC</title>
+    <title>ODYSSEY-1 | World-Class Aerospace MCC</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Cesium.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Widgets/widgets.css" rel="stylesheet">
     <style>
@@ -11,77 +11,99 @@
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #cesiumContainer { width: 100%; height: 420px; border-radius: 4px; overflow: hidden; position: relative; background: #000; }
-        .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 3px 0; }
-        input, select { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 5px; font-family: monospace; }
-        label { font-size: 10px; color: #38bdf8; display: block; margin-top: 3px; font-weight: bold; }
-        button { background: #0284c7; color: #fff; border: none; padding: 7px; margin-top: 5px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+        #cesiumContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #000; }
+        .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
+        input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 4px; box-sizing: border-box; border-radius: 4px; margin-bottom: 4px; font-family: monospace; }
+        label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
+        button { background: #0284c7; color: #fff; border: none; padding: 6px; margin-top: 4px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background: #0369a1; }
-        pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 80px; overflow-y: auto; margin-top: 4px; }
-        .cam-controls { position: absolute; top: 15px; left: 15px; z-index: 999; background: rgba(3, 7, 18, 0.85); padding: 6px; border-radius: 4px; border: 1px solid #00ffcc; }
-        .cam-controls button { width: auto; padding: 4px 8px; font-size: 10px; margin-right: 4px; display: inline-block; background: #0284c7; color: #fff; }
+        pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 60px; overflow-y: auto; margin-top: 4px; }
+        .cam-controls { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); padding: 5px; border-radius: 4px; border: 1px solid #00ffcc; }
+        .cam-controls button { width: auto; padding: 3px 6px; font-size: 9px; margin-right: 3px; display: inline-block; background: #0284c7; }
+        .attitude-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; text-align: center; }
+        .attitude-box { background: #020617; border: 1px solid #1e293b; padding: 4px; border-radius: 4px; }
     </style>
 </head>
 <body>
     <header>
-        <h1>🚀 ODYSSEY-1 | ADVANCED TACTICAL & ORBITAL MISSION CONTROL</h1>
+        <h1>🚀 ODYSSEY-1 | ADVANCED FLIGHT SOFTWARE & MCC</h1>
         <div id="status" style="color: #00ffcc;">● TELEMETRY LINK: ACTIVE</div>
     </header>
     <div class="layout">
         <div class="panel" style="position: relative;">
             <h3>🌐 Visualización Geoespacial 3D (Satélite HD)</h3>
             <div class="cam-controls">
-                <span style="font-size: 10px; color: #fff; margin-right: 4px;">CAM:</span>
-                <button onclick="setCamMode('tactical')">🎯 Táctica Local</button>
-                <button onclick="setCamMode('chase')">🚀 Chase Cam</button>
-                <button onclick="setCamMode('global')">🌍 Global 3D</button>
+                <span style="font-size: 9px; color: #fff;">CAM:</span>
+                <button onclick="setCamMode('tactical')">🎯 Táctica</button>
+                <button onclick="setCamMode('chase')">🚀 Chase</button>
+                <button onclick="setCamMode('global')">🌍 Global</button>
             </div>
             <div id="cesiumContainer"></div>
         </div>
         <div class="panel">
-            <h3>🛰️ Vector de Estado & Telemetría</h3>
-            <div>Altitud MSL: <span id="alt" class="metric">-- km</span></div>
+            <h3>🛰️ Vector de Estado, Actitud & TVC Gimbal</h3>
+            <div>Altitud MSL (EKF): <span id="alt" class="metric">-- km</span></div>
             <div>Velocidad Total: <span id="vel" class="metric">-- km/h</span></div>
             <div>Distancia a Destino: <span id="dist-target" class="metric" style="color: #f59e0b;">-- km</span></div>
-            <div>Esfera Influencia (SOI): <span id="soi" style="font-size: 11px; color: #38bdf8;">--</span></div>
-            <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #22c55e;">POWERED_FLIGHT_PROPULSION</span></div>
-            <div>Estación DSN: <span id="dsn" style="font-size: 11px;">--</span></div>
-            <div>Modo HIL: <span id="hil" style="color: #22c55e;">VIRTUAL_SIMULATION</span></div>
-            <button onclick="triggerAbort()" style="background: #ef4444; margin-top: 15px; font-size: 13px;">🚨 ABORTO DE EMERGENCIA (FTS)</button>
+            <div class="attitude-grid">
+                <div class="attitude-box"><label>ROLL</label><span id="att-roll" style="color:#38bdf8;">0°</span></div>
+                <div class="attitude-box"><label>PITCH</label><span id="att-pitch" style="color:#34d399;">0°</span></div>
+                <div class="attitude-box"><label>YAW</label><span id="att-yaw" style="color:#f59e0b;">0°</span></div>
+            </div>
+            <div class="attitude-grid" style="margin-top: 4px;">
+                <div class="attitude-box"><label>TVC-X</label><span id="tvc-x" style="color:#a855f7;">0.0°</span></div>
+                <div class="attitude-box"><label>TVC-Y</label><span id="tvc-y" style="color:#a855f7;">0.0°</span></div>
+                <div class="attitude-box"><label>HIL MODE</label><span id="hil" style="font-size:9px; color:#38bdf8;">VIRTUAL</span></div>
+            </div>
+            <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #22c55e;">POWERED_FLIGHT</span></div>
+            <button onclick="triggerAbort()" style="background: #ef4444; margin-top: 6px; font-size: 11px;">🚨 ABORTO DE EMERGENCIA (FTS)</button>
         </div>
     </div>
-    <div class="layout" style="margin-top: 10px; grid-template-columns: 1.2fr 1fr;">
+    <div class="layout" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
         <div class="panel">
-            <h3>🎯 Configuración de Misión (Sanarate ➔ Guatemala)</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <div>
-                    <label>Pad de Salida (Lat, Lon):</label>
-                    <input type="number" id="pad-lat" value="14.7883" step="any">
-                    <input type="number" id="pad-lon" value="-90.1988" step="any">
-                </div>
-                <div>
-                    <label>Zona de Destino (Lat, Lon):</label>
-                    <input type="number" id="target-lat" value="14.6133" step="any">
-                    <input type="number" id="target-lon" value="-90.5283" step="any">
-                </div>
-            </div>
-            <button onclick="updateMissionCoordinates()">⚡ Sincronizar Ruta en Servidor</button>
+            <h3>🎯 Configuración de Misión</h3>
+            <label>Pad Salida (Lat, Lon):</label>
+            <input type="number" id="pad-lat" value="14.7883" step="any">
+            <input type="number" id="pad-lon" value="-90.1988" step="any">
+            <label>Zona Destino (Lat, Lon):</label>
+            <input type="number" id="target-lat" value="14.6133" step="any">
+            <input type="number" id="target-lon" value="-90.5283" step="any">
+            <button onclick="updateMissionCoordinates()">⚡ Sincronizar Ruta</button>
         </div>
         <div class="panel">
-            <h3>📐 Solucionador Balístico ($\Delta v$) & Uplink</h3>
-            <div style="display: flex; gap: 6px;">
-                <input type="number" id="target-alt" value="50" placeholder="Meta km">
-                <button onclick="calcBurn()" style="background: #0d9488; margin-top: 0;">Calcular Δv</button>
-            </div>
-            <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; display: none;">📡 ENVIAR UPLINK A BORDO</button>
+            <h3>📐 Solucionador Δv & Uplink CRC32</h3>
+            <input type="number" id="target-alt" value="50" placeholder="Meta km">
+            <button onclick="calcBurn()" style="background: #0d9488;">Calcular Δv</button>
+            <button id="btn-uplink" onclick="sendUplink()" style="background: #dc2626; display: none;">📡 ENVIAR UPLINK SEGURO</button>
             <pre id="burn-res">Standby</pre>
-            <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 3px;">Esperando transmisión...</pre>
+            <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 2px;">Esperando...</pre>
+        </div>
+        <div class="panel">
+            <h3>📼 Caja Negra Replay & Reportes</h3>
+            <button onclick="fetchLogs()" style="background: #8b5cf6;">🎞️ Cargar Vuelo Grabado</button>
+            <button onclick="downloadReport()" style="background: #059669; margin-top: 4px;">📄 Descargar Reporte de Misión</button>
+            <pre id="log-status">Listo para replay.</pre>
         </div>
     </div>
     <script>
         Cesium.Ion.defaultAccessToken = '';
         let viewer, launchPadEntity, impactEntity, satelliteEntity;
         let trajectoryHistory = [];
+
+        function computeCRC32(str) {
+            let crc = 0 ^ (-1);
+            for (let i = 0; i < str.length; i++) {
+                let c = str.charCodeAt(i);
+                crc = (crc >>> 8) ^ table[(crc ^ c) & 0xFF];
+            }
+            return (crc ^ (-1)) >>> 0;
+        }
+        let table = [];
+        for (let i = 0; i < 256; i++) {
+            let c = i;
+            for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            table[i] = c;
+        }
 
         function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
             const R = 6371.0;
@@ -95,24 +117,12 @@
 
         async function initViewer() {
             viewer = new Cesium.Viewer('cesiumContainer', {
-                baseLayerPicker: false,
-                geocoder: false,
-                timeline: false,
-                animation: false,
-                sceneModePicker: false,
-                navigationHelpButton: false
+                baseLayerPicker: false, geocoder: false, timeline: false, animation: false, sceneModePicker: false, navigationHelpButton: false
             });
-
-            // Usar Imagery Provider robusto (OpenStreetMap estándar de alta compatibilidad en la nube)
             try {
-                const osmProvider = new Cesium.OpenStreetMapImageryProvider({
-                    url: 'https://a.tile.openstreetmap.org/'
-                });
                 viewer.imageryLayers.removeAll();
-                viewer.imageryLayers.addImageryProvider(osmProvider);
-            } catch (e) {
-                console.warn("Usando proveedor por defecto de Cesium", e);
-            }
+                viewer.imageryLayers.addImageryProvider(new Cesium.OpenStreetMapImageryProvider({ url: 'https://a.tile.openstreetmap.org/' }));
+            } catch(e) {}
 
             const pLat = parseFloat(document.getElementById('pad-lat').value);
             const pLon = parseFloat(document.getElementById('pad-lon').value);
@@ -123,35 +133,15 @@
             const targetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
             trajectoryHistory = [launchPos];
 
-            launchPadEntity = viewer.entities.add({
-                position: launchPos,
-                point: { pixelSize: 10, color: Cesium.Color.ORANGE },
-                label: { text: '🚀 SANARATE (Pad)', font: '10pt monospace', fillColor: Cesium.Color.ORANGE, pixelOffset: new Cesium.Cartesian2(0, -18) }
-            });
-
+            launchPadEntity = viewer.entities.add({ position: launchPos, point: { pixelSize: 8, color: Cesium.Color.ORANGE } });
             satelliteEntity = viewer.entities.add({
                 position: launchPos,
-                cylinder: {
-                    length: 6000.0,
-                    topRadius: 0.0,
-                    bottomRadius: 2000.0,
-                    material: Cesium.Color.CYAN
-                },
-                label: { text: '📍 ODYSSEY-1', font: '10pt monospace', fillColor: Cesium.Color.CYAN, pixelOffset: new Cesium.Cartesian2(0, -22) }
+                cylinder: { length: 5000.0, topRadius: 0.0, bottomRadius: 1500.0, material: Cesium.Color.CYAN }
             });
-
-            impactEntity = viewer.entities.add({
-                position: targetPos,
-                point: { pixelSize: 12, color: Cesium.Color.RED },
-                label: { text: '🎯 DESTINO: CEMENTERIO GUA', font: '10pt monospace', fillColor: Cesium.Color.RED, pixelOffset: new Cesium.Cartesian2(0, -20) }
-            });
+            impactEntity = viewer.entities.add({ position: targetPos, point: { pixelSize: 10, color: Cesium.Color.RED } });
 
             viewer.entities.add({
-                polyline: {
-                    positions: new Cesium.CallbackProperty(() => trajectoryHistory, false),
-                    width: 4,
-                    material: Cesium.Color.YELLOW
-                }
+                polyline: { positions: new Cesium.CallbackProperty(() => trajectoryHistory, false), width: 3, material: Cesium.Color.YELLOW }
             });
 
             setCamMode('tactical');
@@ -162,23 +152,14 @@
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
             const tLon = parseFloat(document.getElementById('target-lon').value);
-
             viewer.trackedEntity = undefined;
 
             if (mode === 'tactical') {
-                const midLon = (pLon + tLon) / 2;
-                const midLat = (pLat + tLat) / 2;
-                viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(midLon, midLat, 75000.0),
-                    duration: 1.2
-                });
+                viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees((pLon+tLon)/2, (pLat+tLat)/2, 75000.0), duration: 1.0 });
             } else if (mode === 'chase') {
                 viewer.trackedEntity = satelliteEntity;
             } else if (mode === 'global') {
-                viewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(-90.0, 15.0, 5000000.0),
-                    duration: 1.5
-                });
+                viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(-90.0, 15.0, 5000000.0), duration: 1.2 });
             }
         }
 
@@ -189,10 +170,13 @@
             const data = JSON.parse(event.data);
             document.getElementById('alt').innerText = (data.altitude_km ?? '--') + " km";
             document.getElementById('vel').innerText = (data.speed_kmh ?? '--') + " km/h";
-            document.getElementById('soi').innerText = data.active_soi ?? '--';
+            document.getElementById('att-roll').innerText = (data.roll ?? 0) + "°";
+            document.getElementById('att-pitch').innerText = (data.pitch ?? 0) + "°";
+            document.getElementById('att-yaw').innerText = (data.yaw ?? 0) + "°";
+            document.getElementById('tvc-x').innerText = (data.tvc_x ?? 0) + "°";
+            document.getElementById('tvc-y').innerText = (data.tvc_y ?? 0) + "°";
             document.getElementById('fsm').innerText = data.sequencer_state ?? 'RUNNING';
-            document.getElementById('dsn').innerText = data.dsn_station ?? '--';
-            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL_SIMULATION';
+            document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
 
             if (data.geodetic && satelliteEntity) {
                 const lat = data.geodetic.lat;
@@ -202,13 +186,12 @@
                 const newPos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
                 satelliteEntity.position = new Cesium.ConstantPositionProperty(newPos);
 
-                if (trajectoryHistory.length > 300) trajectoryHistory.shift();
+                if (trajectoryHistory.length > 250) trajectoryHistory.shift();
                 trajectoryHistory.push(newPos);
 
                 const tLat = parseFloat(document.getElementById('target-lat').value);
                 const tLon = parseFloat(document.getElementById('target-lon').value);
-                const distKm = calculateHaversineDistance(lat, lon, tLat, tLon);
-                document.getElementById('dist-target').innerText = distKm.toFixed(2) + " km";
+                document.getElementById('dist-target').innerText = calculateHaversineDistance(lat, lon, tLat, tLon).toFixed(2) + " km";
             }
         };
 
@@ -217,33 +200,50 @@
             const pLon = parseFloat(document.getElementById('pad-lon').value);
             const tLat = parseFloat(document.getElementById('target-lat').value);
             const tLon = parseFloat(document.getElementById('target-lon').value);
-            
             await fetch('/api/mission/coordinates', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pad_lat: pLat, pad_lon: pLon, target_lat: tLat, target_lon: tLon })
             });
-
-            const newLaunchPos = Cesium.Cartesian3.fromDegrees(pLon, pLat, 0);
-            const newTargetPos = Cesium.Cartesian3.fromDegrees(tLon, tLat, 0);
-            launchPadEntity.position = newLaunchPos;
-            impactEntity.position = newTargetPos;
-            trajectoryHistory = [newLaunchPos];
+            trajectoryHistory = [Cesium.Cartesian3.fromDegrees(pLon, pLat, 0)];
             setCamMode('tactical');
-            alert("✅ Ruta actualizada y sincronizada en el visor 3D.");
+            alert("✅ Ruta reseteada e inyectada.");
         }
 
         async function calcBurn() {
             const alt = parseFloat(document.getElementById('target-alt').value);
-            const res = await fetch('/api/orbit/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({target_altitude_km: alt}) });
+            const res = await fetch('/api/orbit/plan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: computeCRC32(alt.toString()) })
+            });
             const j = await res.json();
             document.getElementById('burn-res').innerText = JSON.stringify(j, null, 2);
             document.getElementById('btn-uplink').style.display = 'block';
         }
 
         async function sendUplink() {
-            document.getElementById('uplink-res').style.display = 'block';
-            document.getElementById('uplink-res').innerText = "✅ TC UPLINK TRANSMITIDO CON ÉXITO\nVector Δv inyectado en la OBC de ODYSSEY-1.";
+            const alt = parseFloat(document.getElementById('target-alt').value);
+            const crc = computeCRC32(alt.toString());
+            const res = await fetch('/api/orbit/plan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ target_altitude_km: alt, crc32_checksum: crc })
+            });
+            if (res.ok) {
+                document.getElementById('uplink-res').style.display = 'block';
+                document.getElementById('uplink-res').innerText = `✅ TC UPLINK ACEPTADO (CRC32: ${crc})`;
+            }
+        }
+
+        async function fetchLogs() {
+            const res = await fetch('/api/mission/logs');
+            const data = await res.json();
+            document.getElementById('log-status').innerText = `Cargados ${data.logs.length} registros de la Caja Negra (SQLite).`;
+        }
+
+        function downloadReport() {
+            window.open('/api/mission/report/pdf', '_blank');
         }
 
         async function triggerAbort() {

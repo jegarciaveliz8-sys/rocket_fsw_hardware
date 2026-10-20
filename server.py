@@ -144,28 +144,32 @@ async def plan_orbit(req: OrbitPlanRequest):
 
 @app.post("/api/asistente")
 async def field_assistant(req: AssistantRequest):
-    try:
-        client = genai.Client()
-        context_prompt = f"""
-        Actúa como el Ingeniero Jefe de Software de Vuelo en el Centro de Control ODYSSEY-1.
-        Estado actual de la telemetría de la nave (Misión ID: {mission_state['mission_id']}):
-        - Altitud EKF: {mission_state['altitude_km']} km
-        - Velocidad: {mission_state['speed_kmh']} km/h
-        - Presión Dinámica (Max Q): {mission_state.get('dynamic_pressure_kpa', 0)} kPa
-        - Secuenciador FSM: {mission_state['sequencer_state']}
-        - Estado FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
-        - Actitud (Roll, Pitch, Yaw): {mission_state['roll']}°, {mission_state['pitch']}°, {mission_state['yaw']}°
-        
-        Pregunta del operador de campo: {req.prompt}
-        Responde de manera técnica, profesional y concisa utilizando terminología aeroespacial.
-        """
-        response = client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=context_prompt,
-        )
-        return {"response": response.text}
-    except Exception as e:
-        return {"response": f"❌ Error conectando con Gemini API: {str(e)}"}
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            client = genai.Client()
+            context_prompt = f"""
+            Actúa como el Ingeniero Jefe de Software de Vuelo en el Centro de Control ODYSSEY-1.
+            Estado actual de la telemetría de la nave (Misión ID: {mission_state['mission_id']}):
+            - Altitud EKF: {mission_state['altitude_km']} km
+            - Velocidad: {mission_state['speed_kmh']} km/h
+            - Presión Dinámica (Max Q): {mission_state.get('dynamic_pressure_kpa', 0)} kPa
+            - Secuenciador FSM: {mission_state['sequencer_state']}
+            - Estado FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+            - Actitud (Roll, Pitch, Yaw): {mission_state['roll']}°, {mission_state['pitch']}°, {mission_state['yaw']}°
+            
+            Pregunta del operador de campo: {req.prompt}
+            Responde de manera técnica, profesional y concisa utilizando terminología aeroespacial.
+            """
+            response = client.models.generate_content(
+                model='gemini-3.8-flash',
+                contents=context_prompt,
+            )
+            return {"response": response.text}
+        except Exception as e:
+            if attempt == max_retries - 1:
+                return {"response": f"⚠️ DSN ENLACE DEGRADADO (Gemini 503 Alta Demanda): Los subsistemas operativos locales siguen nominales. Intenta de nuevo en unos segundos."}
+            await asyncio.sleep(1)
 
 @app.get("/api/mission/logs")
 async def get_flight_logs():

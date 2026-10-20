@@ -12,15 +12,16 @@
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
-        #mapContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; }
+        #mapContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; cursor: crosshair; }
         .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
-        input { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 4px; box-sizing: border-box; border-radius: 4px; margin-bottom: 4px; font-family: monospace; }
+        input, select { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; font-family: monospace; }
         label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
         button { background: #0284c7; color: #fff; border: none; padding: 6px; margin-top: 4px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
         button:hover { background: #0369a1; }
         pre { background: #020617; padding: 6px; font-size: 10px; color: #34d399; max-height: 60px; overflow-y: auto; margin-top: 4px; }
         .cam-controls { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); padding: 5px; border-radius: 4px; border: 1px solid #00ffcc; }
         .cam-controls button { width: auto; padding: 3px 6px; font-size: 9px; margin-right: 3px; display: inline-block; background: #0284c7; }
+        .map-hint { position: absolute; bottom: 8px; right: 10px; z-index: 999; background: rgba(3, 7, 18, 0.85); color: #38bdf8; padding: 3px 6px; border-radius: 3px; font-size: 9px; border: 1px solid #38bdf8; pointer-events: none; }
         .attitude-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; text-align: center; }
         .attitude-box { background: #020617; border: 1px solid #1e293b; padding: 4px; border-radius: 4px; }
         .fdir-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; text-align: center; margin-top: 4px; }
@@ -36,7 +37,7 @@
     </header>
     <div class="layout">
         <div class="panel" style="position: relative;">
-            <h3>🌐 Visualización Geoespacial (Mapa Táctico HD)</h3>
+            <h3>🌐 Visualización Geoespacial (Mapa Táctico HD Satelital)</h3>
             <div class="cam-controls">
                 <span style="font-size: 9px; color: #fff;">VISTA:</span>
                 <button onclick="setCamMode('tactical')">🎯 Táctica</button>
@@ -44,6 +45,7 @@
                 <button onclick="setCamMode('global')">🌍 Global</button>
             </div>
             <div id="mapContainer"></div>
+            <div class="map-hint">💡 Clic: Destino | Shift+Clic: Pad Salida</div>
         </div>
         <div class="panel">
             <h3>🛰️ Vector de Estado, Actitud & FDIR System</h3>
@@ -75,15 +77,35 @@
 
     <div class="layout" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
         <div class="panel">
-            <h3>🎯 Configuración de Misión</h3>
+            <h3>🎯 Configuración de Misión & Objetivos Directos</h3>
+            
+            <label>Selección Directa (Origen):</label>
+            <select id="preset-pad" onchange="loadPadPreset(this.value)">
+                <option value="">-- Seleccionar Hotel / Origen --</option>
+                <option value="14.5975,-90.5131">Hotel Westin Camino Real (Guatemala)</option>
+                <option value="14.5578,-90.7295">Hotel Casa Santo Domingo (Antigua, GTM)</option>
+                <option value="9.9333,-84.0833">Hotel InterContinental (Costa Rica)</option>
+            </select>
+
             <label>Pad Salida (Lat, Lon):</label>
-            <input type="number" id="pad-lat" value="14.7883" step="any">
-            <input type="number" id="pad-lon" value="-90.1988" step="any">
+            <input type="number" id="pad-lat" value="14.5975" step="any">
+            <input type="number" id="pad-lon" value="-90.5131" step="any">
+            
+            <label>Selección Directa (Destino):</label>
+            <select id="preset-target" onchange="loadTargetPreset(this.value)">
+                <option value="">-- Seleccionar Cuartel / Destino --</option>
+                <option value="13.7024,-89.2241">Comando de Ingenieros (El Salvador) [~174 km]</option>
+                <option value="12.1485,-86.2730">Cuartel General Ejército (Nicaragua) [~703 km]</option>
+                <option value="9.9325,-84.0800">Comando Fuerza Pública (Costa Rica) [~1003 km]</option>
+            </select>
+
             <label>Zona Destino (Lat, Lon):</label>
-            <input type="number" id="target-lat" value="14.6133" step="any">
-            <input type="number" id="target-lon" value="-90.5283" step="any">
+            <input type="number" id="target-lat" value="9.9325" step="any">
+            <input type="number" id="target-lon" value="-84.0800" step="any">
+            
             <button onclick="updateMissionCoordinates()">⚡ Sincronizar Ruta</button>
         </div>
+        
         <div class="panel">
             <h3>📐 Solucionador Δv & Uplink CRC32</h3>
             <input type="number" id="target-alt" value="50" placeholder="Meta km" step="any">
@@ -92,6 +114,7 @@
             <pre id="burn-res">Standby</pre>
             <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 2px;">Esperando...</pre>
         </div>
+        
         <div class="panel">
             <h3>📼 Reproductor DVR & Caja Negra</h3>
             <button onclick="fetchLogs()" style="background: #8b5cf6;">▶️ Reproducir Telemetría DVR</button>
@@ -155,6 +178,34 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
+        function loadPadPreset(val) {
+            if (!val) return;
+            const parts = val.split(',');
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            document.getElementById('pad-lat').value = lat;
+            document.getElementById('pad-lon').value = lon;
+            if (map) {
+                if (padMarker) padMarker.setLatLng([lat, lon]);
+                map.setView([lat, lon], 17);
+            }
+            updateMissionCoordinates();
+        }
+
+        function loadTargetPreset(val) {
+            if (!val) return;
+            const parts = val.split(',');
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            document.getElementById('target-lat').value = lat;
+            document.getElementById('target-lon').value = lon;
+            if (map) {
+                if (targetMarker) targetMarker.setLatLng([lat, lon]);
+                map.setView([lat, lon], 17);
+            }
+            updateMissionCoordinates();
+        }
+
         function initMap() {
             if (map) return;
             const pLat = parseFloat(document.getElementById('pad-lat').value);
@@ -179,6 +230,25 @@
 
             trajectoryCoords = [[pLat, pLon]];
             trajectoryPolyline = L.polyline(trajectoryCoords, { color: '#f59e0b', weight: 4 }).addTo(map);
+
+            // SELECCIÓN DIRECTA AUTOMÁTICA POR CLIC EN EL MAPA SATELITAL
+            map.on('click', function(e) {
+                const clickLat = e.latlng.lat.toFixed(6);
+                const clickLon = e.latlng.lng.toFixed(6);
+
+                if (e.originalEvent.shiftKey) {
+                    // Shift + Clic = Asignar Pad de Salida
+                    document.getElementById('pad-lat').value = clickLat;
+                    document.getElementById('pad-lon').value = clickLon;
+                    if (padMarker) padMarker.setLatLng([clickLat, clickLon]);
+                } else {
+                    // Clic Normal = Asignar Zona de Destino
+                    document.getElementById('target-lat').value = clickLat;
+                    document.getElementById('target-lon').value = clickLon;
+                    if (targetMarker) targetMarker.setLatLng([clickLat, clickLon]);
+                }
+                updateMissionCoordinates();
+            });
         }
 
         function setCamMode(mode) {
@@ -193,7 +263,7 @@
                 map.fitBounds([[pLat, pLon], [tLat, tLon]], { padding: [30, 30] });
             } else if (mode === 'chase') {
                 autoFollow = true;
-                if (vesselMarker) map.setView(vesselMarker.getLatLng(), 13);
+                if (vesselMarker) map.setView(vesselMarker.getLatLng(), 17);
             } else if (mode === 'global') {
                 autoFollow = false;
                 map.setView([15.0, -90.0], 6);
@@ -281,11 +351,8 @@
                     trajectoryCoords = [[pLat, pLon]];
                     if (trajectoryPolyline) trajectoryPolyline.setLatLngs(trajectoryCoords);
                 }
-
-                setCamMode('tactical');
-                alert("✅ Ruta sincronizada e inyectada correctamente.");
             } catch (err) {
-                alert("❌ Error al sincronizar ruta: " + err.message);
+                console.error("Error al sincronizar ruta: ", err);
             }
         }
 

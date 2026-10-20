@@ -74,7 +74,9 @@ mission_state = {
     "dsn_station": "Guatemala Tactical Link",
     "hil_mode": "VIRTUAL_SIMULATION",
     "abort_triggered": False,
-    "flight_time": 0.0
+    "flight_time": 0.0,
+    "fdir_status": "NOMINAL",
+    "fdir_alert": "NO_ANOMALY_DETECTED"
 }
 
 class MissionCoordinates(BaseModel):
@@ -103,6 +105,18 @@ def hil_serial_listener():
 
 threading.Thread(target=hil_serial_listener, daemon=True).start()
 
+# --- Motor FDIR (Fault Detection, Isolation, and Recovery) ---
+def evaluate_fdir():
+    if abs(mission_state["tvc_x"]) > 4.5 or abs(mission_state["tvc_y"]) > 4.5:
+        mission_state["fdir_status"] = "WARNING"
+        mission_state["fdir_alert"] = "TVC_MAX_GIMBAL_EXCURSION"
+    elif mission_state["speed_kmh"] > 2500:
+        mission_state["fdir_status"] = "ALERT"
+        mission_state["fdir_alert"] = "AERODYNAMIC_OVERPOWER_MAX_Q"
+    else:
+        mission_state["fdir_status"] = "NOMINAL"
+        mission_state["fdir_alert"] = "SYSTEMS_OPTIMAL"
+
 @app.post("/api/mission/coordinates")
 async def set_coordinates(coords: MissionCoordinates):
     mission_state["pad_lat"] = coords.pad_lat
@@ -118,6 +132,8 @@ async def set_coordinates(coords: MissionCoordinates):
 async def trigger_abort():
     mission_state["abort_triggered"] = True
     mission_state["sequencer_state"] = "ABORT_MISSION_LES_TRIGGERED"
+    mission_state["fdir_status"] = "CRITICAL"
+    mission_state["fdir_alert"] = "MANUAL_ABORT_FTS_ACTIVATED"
     return {"status": "ABORT_SEQUENCE_ACTIVATED"}
 
 @app.post("/api/orbit/plan")
@@ -139,7 +155,7 @@ async def plan_orbit(req: OrbitPlanRequest):
 async def get_flight_logs():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs ORDER BY id ASC LIMIT 300")
+    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs ORDER BY id ASC LIMIT 500")
     rows = cursor.fetchall()
     conn.close()
     return {"logs": rows}
@@ -149,7 +165,7 @@ async def generate_pdf_report():
     report_file = "flight_report.png"
     if os.path.exists(report_file):
         return FileResponse(report_file, media_type="image/png", filename="flight_report.png")
-    return {"status": "Report generated", "details": "ODYSSEY-1 Telemetry Mission Summary PDF/PNG Certified"}
+    return {"status": "Report generated", "details": "ODYSSEY-1 Telemetry Mission Summary Certified"}
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
@@ -173,7 +189,6 @@ async def websocket_telemetry(websocket: WebSocket):
                 mission_state["pitch"] = round(45.0 * (1.0 - progress) + 5.0 * math.cos(mission_state["flight_time"]), 2)
                 mission_state["yaw"] = round(math.atan2(mission_state["target_lat"] - mission_state["pad_lat"], mission_state["target_lon"] - mission_state["pad_lon"]) * 180 / math.pi, 2)
                 
-                # Control Vectorial de Empuje (TVC Gimbal Angles)
                 mission_state["tvc_x"] = round(math.sin(mission_state["flight_time"] * 4.0) * 3.5, 2)
                 mission_state["tvc_y"] = round(math.cos(mission_state["flight_time"] * 4.0) * 3.5, 2)
 
@@ -197,6 +212,8 @@ async def websocket_telemetry(websocket: WebSocket):
             mission_state["altitude_km"] = round(filtered_alt, 2)
             mission_state["speed_kmh"] = total_speed
 
+            evaluate_fdir()
+
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute(
@@ -207,6 +224,7 @@ async def websocket_telemetry(websocket: WebSocket):
             conn.close()
 
             telemetry_payload = {
+                "flight_time": round(mission_state["flight_time"], 1),
                 "altitude_km": mission_state["altitude_km"],
                 "speed_kmh": mission_state["speed_kmh"],
                 "roll": mission_state["roll"],
@@ -216,6 +234,8 @@ async def websocket_telemetry(websocket: WebSocket):
                 "tvc_y": mission_state["tvc_y"],
                 "active_soi": mission_state["active_soi"],
                 "sequencer_state": mission_state["sequencer_state"],
+                "fdir_status": mission_state["fdir_status"],
+                "fdir_alert": mission_state["fdir_alert"],
                 "dsn_station": mission_state["dsn_station"],
                 "hil_mode": mission_state["hil_mode"],
                 "geodetic": {

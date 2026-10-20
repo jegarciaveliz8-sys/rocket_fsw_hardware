@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | World-Class Aerospace MCC</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Cesium.js"></script>
+    <script src="https://cdn.jsdelivr.com/npm/chart.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Widgets/widgets.css" rel="stylesheet">
     <style>
         body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 12px; }
-        header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-align: center; }
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
@@ -22,6 +23,10 @@
         .cam-controls button { width: auto; padding: 3px 6px; font-size: 9px; margin-right: 3px; display: inline-block; background: #0284c7; }
         .attitude-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; text-align: center; }
         .attitude-box { background: #020617; border: 1px solid #1e293b; padding: 4px; border-radius: 4px; }
+        .fdir-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; text-align: center; margin-top: 4px; }
+        .fdir-nominal { background: #15803d; color: #fff; }
+        .fdir-warning { background: #b45309; color: #fff; }
+        .fdir-alert { background: #b91c1c; color: #fff; }
     </style>
 </head>
 <body>
@@ -41,7 +46,7 @@
             <div id="cesiumContainer"></div>
         </div>
         <div class="panel">
-            <h3>🛰️ Vector de Estado, Actitud & TVC Gimbal</h3>
+            <h3>🛰️ Vector de Estado, Actitud & FDIR System</h3>
             <div>Altitud MSL (EKF): <span id="alt" class="metric">-- km</span></div>
             <div>Velocidad Total: <span id="vel" class="metric">-- km/h</span></div>
             <div>Distancia a Destino: <span id="dist-target" class="metric" style="color: #f59e0b;">-- km</span></div>
@@ -53,12 +58,22 @@
             <div class="attitude-grid" style="margin-top: 4px;">
                 <div class="attitude-box"><label>TVC-X</label><span id="tvc-x" style="color:#a855f7;">0.0°</span></div>
                 <div class="attitude-box"><label>TVC-Y</label><span id="tvc-y" style="color:#a855f7;">0.0°</span></div>
-                <div class="attitude-box"><label>HIL MODE</label><span id="hil" style="font-size:9px; color:#38bdf8;">VIRTUAL</span></div>
+                <div class="attitude-box"><label>HIL</label><span id="hil" style="font-size:9px; color:#38bdf8;">VIRTUAL</span></div>
             </div>
             <div>Secuenciador FSM: <span id="fsm" class="metric" style="color: #22c55e;">POWERED_FLIGHT</span></div>
+            <div id="fdir-box" class="fdir-badge fdir-nominal">FDIR: NOMINAL | SYSTEMS_OPTIMAL</div>
             <button onclick="triggerAbort()" style="background: #ef4444; margin-top: 6px; font-size: 11px;">🚨 ABORTO DE EMERGENCIA (FTS)</button>
         </div>
     </div>
+
+    <!-- Panel de Gráficas de Telemetría en Tiempo Real -->
+    <div class="panel" style="margin-top: 10px;">
+        <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
+        <div style="height: 140px; width: 100%;">
+            <canvas id="telemetryChart"></canvas>
+        </div>
+    </div>
+
     <div class="layout" style="margin-top: 10px; grid-template-columns: 1fr 1fr 1fr;">
         <div class="panel">
             <h3>🎯 Configuración de Misión</h3>
@@ -79,16 +94,42 @@
             <pre id="uplink-res" style="color: #38bdf8; display: none; margin-top: 2px;">Esperando...</pre>
         </div>
         <div class="panel">
-            <h3>📼 Caja Negra Replay & Reportes</h3>
-            <button onclick="fetchLogs()" style="background: #8b5cf6;">🎞️ Cargar Vuelo Grabado</button>
-            <button onclick="downloadReport()" style="background: #059669; margin-top: 4px;">📄 Descargar Reporte de Misión</button>
-            <pre id="log-status">Listo para replay.</pre>
+            <h3>📼 Reproductor DVR & Caja Negra</h3>
+            <button onclick="fetchLogs()" style="background: #8b5cf6;">▶️ Reproducir Telemetría DVR</button>
+            <input type="range" id="dvr-slider" min="0" max="100" value="0" style="margin-top:6px;" oninput="scrubDVR(this.value)">
+            <button onclick="downloadReport()" style="background: #059669; margin-top: 4px;">📄 Descargar Reporte PDF</button>
+            <pre id="log-status">DVR listo.</pre>
         </div>
     </div>
+
     <script>
         Cesium.Ion.defaultAccessToken = '';
         let viewer, launchPadEntity, impactEntity, satelliteEntity;
         let trajectoryHistory = [];
+        let loadedLogs = [];
+
+        // Inicializar Chart.js en tiempo real
+        const ctx = document.getElementById('telemetryChart').getContext('2d');
+        const telemetryChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Altitud (km)', data: [], borderColor: '#38bdf8', borderWidth: 2, yAxisID: 'y' },
+                    { label: 'Velocidad (km/h)', data: [], borderColor: '#34d399', borderWidth: 2, yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                    y: { type: 'linear', position: 'left', ticks: { color: '#38bdf8' }, grid: { color: '#1e293b' } },
+                    y1: { type: 'linear', position: 'right', ticks: { color: '#34d399' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: { legend: { labels: { color: '#fff', font: { size: 10 } } } }
+            }
+        });
 
         function computeCRC32(str) {
             let crc = 0 ^ (-1);
@@ -178,6 +219,24 @@
             document.getElementById('fsm').innerText = data.sequencer_state ?? 'RUNNING';
             document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
 
+            // Actualizar FDIR Badge
+            const fdirBox = document.getElementById('fdir-box');
+            fdirBox.innerText = `FDIR: ${data.fdir_status} | ${data.fdir_alert}`;
+            fdirBox.className = "fdir-badge " + (data.fdir_status === "NOMINAL" ? "fdir-nominal" : (data.fdir_status === "WARNING" ? "fdir-warning" : "fdir-alert"));
+
+            // Actualizar Gráfica
+            if (data.flight_time !== undefined) {
+                if (telemetryChart.data.labels.length > 25) {
+                    telemetryChart.data.labels.shift();
+                    telemetryChart.data.datasets[0].data.shift();
+                    telemetryChart.data.datasets[1].data.shift();
+                }
+                telemetryChart.data.labels.push(`T+${data.flight_time}s`);
+                telemetryChart.data.datasets[0].data.push(data.altitude_km);
+                telemetryChart.data.datasets[1].data.push(data.speed_kmh);
+                telemetryChart.update();
+            }
+
             if (data.geodetic && satelliteEntity) {
                 const lat = data.geodetic.lat;
                 const lon = data.geodetic.lon;
@@ -239,7 +298,29 @@
         async function fetchLogs() {
             const res = await fetch('/api/mission/logs');
             const data = await res.json();
-            document.getElementById('log-status').innerText = `Cargados ${data.logs.length} registros de la Caja Negra (SQLite).`;
+            loadedLogs = data.logs;
+            const slider = document.getElementById('dvr-slider');
+            slider.max = loadedLogs.length - 1;
+            slider.value = 0;
+            document.getElementById('log-status').innerText = `DVR: ${loadedLogs.length} frames cargados. Usa la barra deslizante.`;
+        }
+
+        function scrubDVR(index) {
+            if (!loadedLogs || loadedLogs.length === 0) return;
+            const log = loadedLogs[index];
+            // log format: [timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state]
+            document.getElementById('alt').innerText = log[3] + " km";
+            document.getElementById('vel').innerText = log[4] + " km/h";
+            document.getElementById('att-roll').innerText = log[5] + "°";
+            document.getElementById('att-pitch').innerText = log[6] + "°";
+            document.getElementById('att-yaw').innerText = log[7] + "°";
+            document.getElementById('tvc-x').innerText = log[8] + "°";
+            document.getElementById('tvc-y').innerText = log[9] + "°";
+            document.getElementById('fsm').innerText = log[10];
+
+            const pos = Cesium.Cartesian3.fromDegrees(log[2], log[1], log[3] * 1000.0);
+            satelliteEntity.position = new Cesium.ConstantPositionProperty(pos);
+            document.getElementById('log-status').innerText = `DVR Frame ${index}/${loadedLogs.length - 1} (T+${log[0]}s)`;
         }
 
         function downloadReport() {

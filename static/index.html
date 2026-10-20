@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.108.0/Widgets/widgets.css" rel="stylesheet">
     <style>
         body { background-color: #030712; color: #00ffcc; font-family: 'Courier New', monospace; margin: 0; padding: 12px; }
-        header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-align: center; }
+        header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; }
@@ -66,7 +66,6 @@
         </div>
     </div>
 
-    <!-- Panel de Gráficas de Telemetría en Tiempo Real -->
     <div class="panel" style="margin-top: 10px;">
         <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
         <div style="height: 140px; width: 100%;">
@@ -108,7 +107,6 @@
         let trajectoryHistory = [];
         let loadedLogs = [];
 
-        // Inicializar Chart.js en tiempo real
         const ctx = document.getElementById('telemetryChart').getContext('2d');
         const telemetryChart = new Chart(ctx, {
             type: 'line',
@@ -204,8 +202,8 @@
             }
         }
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/telemetry`);
 
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
@@ -219,12 +217,10 @@
             document.getElementById('fsm').innerText = data.sequencer_state ?? 'RUNNING';
             document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
 
-            // Actualizar FDIR Badge
             const fdirBox = document.getElementById('fdir-box');
             fdirBox.innerText = `FDIR: ${data.fdir_status} | ${data.fdir_alert}`;
             fdirBox.className = "fdir-badge " + (data.fdir_status === "NOMINAL" ? "fdir-nominal" : (data.fdir_status === "WARNING" ? "fdir-warning" : "fdir-alert"));
 
-            // Actualizar Gráfica
             if (data.flight_time !== undefined) {
                 if (telemetryChart.data.labels.length > 25) {
                     telemetryChart.data.labels.shift();
@@ -308,7 +304,6 @@
         function scrubDVR(index) {
             if (!loadedLogs || loadedLogs.length === 0) return;
             const log = loadedLogs[index];
-            // log format: [timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state]
             document.getElementById('alt').innerText = log[3] + " km";
             document.getElementById('vel').innerText = log[4] + " km/h";
             document.getElementById('att-roll').innerText = log[5] + "°";

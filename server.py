@@ -89,23 +89,6 @@ class OrbitPlanRequest(BaseModel):
     target_altitude_km: float
     crc32_checksum: int
 
-def hil_serial_listener():
-    try:
-        import serial
-        port = '/dev/ttyUSB0' if os.name != 'nt' else 'COM3'
-        ser = serial.Serial(port, 115200, timeout=1)
-        mission_state["hil_mode"] = "HARDWARE_IN_THE_LOOP_ACTIVE"
-        while True:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
-            if line.startswith("{"):
-                data = json.loads(line)
-                mission_state.update(data)
-    except Exception:
-        pass
-
-threading.Thread(target=hil_serial_listener, daemon=True).start()
-
-# --- Motor FDIR (Fault Detection, Isolation, and Recovery) ---
 def evaluate_fdir():
     if abs(mission_state["tvc_x"]) > 4.5 or abs(mission_state["tvc_y"]) > 4.5:
         mission_state["fdir_status"] = "WARNING"

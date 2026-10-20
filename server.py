@@ -4,10 +4,12 @@ import asyncio
 import math
 import sqlite3
 import zlib
+import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from google import genai
 
 app = FastAPI(title="ODYSSEY-1 Aerospace FSW & Mission Control")
 
@@ -19,6 +21,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS flight_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_id TEXT,
             timestamp REAL,
             lat REAL,
             lon REAL,
@@ -56,6 +59,7 @@ class SimpleEKF:
 ekf = SimpleEKF()
 
 mission_state = {
+    "mission_id": str(uuid.uuid4())[:8],
     "pad_lat": 14.7883,
     "pad_lon": -90.1988,
     "target_lat": 14.6133,
@@ -68,6 +72,7 @@ mission_state = {
     "yaw": 0.0,
     "tvc_x": 0.0,
     "tvc_y": 0.0,
+    "dynamic_pressure_kpa": 0.0,
     "sequencer_state": "POWERED_FLIGHT_PROPULSION",
     "active_soi": "EARTH_ATMOSPHERIC_TACTICAL",
     "dsn_station": "Guatemala Tactical Link",
@@ -95,7 +100,7 @@ def evaluate_fdir():
     if abs(mission_state["tvc_x"]) > 4.5 or abs(mission_state["tvc_y"]) > 4.5:
         mission_state["fdir_status"] = "WARNING"
         mission_state["fdir_alert"] = "TVC_MAX_GIMBAL_EXCURSION"
-    elif mission_state["speed_kmh"] > 2500:
+    elif mission_state["speed_kmh"] > 2500 or mission_state.get("dynamic_pressure_kpa", 0) > 50:
         mission_state["fdir_status"] = "ALERT"
         mission_state["fdir_alert"] = "AERODYNAMIC_OVERPOWER_MAX_Q"
     else:
@@ -104,6 +109,7 @@ def evaluate_fdir():
 
 @app.post("/api/mission/coordinates")
 async def set_coordinates(coords: MissionCoordinates):
+    mission_state["mission_id"] = str(uuid.uuid4())[:8]
     mission_state["pad_lat"] = coords.pad_lat
     mission_state["pad_lon"] = coords.pad_lon
     mission_state["target_lat"] = coords.target_lat
@@ -111,7 +117,7 @@ async def set_coordinates(coords: MissionCoordinates):
     mission_state["sequencer_state"] = "POWERED_FLIGHT_PROPULSION"
     mission_state["abort_triggered"] = False
     mission_state["flight_time"] = 0.0
-    return {"status": "success", "updated_coordinates": coords.dict()}
+    return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.dict()}
 
 @app.post("/api/mission/abort")
 async def trigger_abort():
@@ -138,28 +144,44 @@ async def plan_orbit(req: OrbitPlanRequest):
 
 @app.post("/api/asistente")
 async def field_assistant(req: AssistantRequest):
-    query = req.prompt.lower()
-    if "estado" in query or "auditar" in query or "fdir" in query:
-        response_text = f"AUDITORÍA FSW: Estado FDIR actual es {mission_state['fdir_status']} ({mission_state['fdir_alert']}). Secuenciador en {mission_state['sequencer_state']} con altitud EKF de {mission_state['altitude_km']} km."
-    else:
-        response_text = f"UPLINK ASISTENTE IA: Consulta de campo recibida ('{req.prompt}'). Subsistemas nominales y enlace activo con DSN."
-    return {"response": response_text}
+    try:
+        client = genai.Client()
+        context_prompt = f"""
+        Actúa como el Ingeniero Jefe de Software de Vuelo en el Centro de Control ODYSSEY-1.
+        Estado actual de la telemetría de la nave (Misión ID: {mission_state['mission_id']}):
+        - Altitud EKF: {mission_state['altitude_km']} km
+        - Velocidad: {mission_state['speed_kmh']} km/h
+        - Presión Dinámica (Max Q): {mission_state.get('dynamic_pressure_kpa', 0)} kPa
+        - Secuenciador FSM: {mission_state['sequencer_state']}
+        - Estado FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+        - Actitud (Roll, Pitch, Yaw): {mission_state['roll']}°, {mission_state['pitch']}°, {mission_state['yaw']}°
+        
+        Pregunta del operador de campo: {req.prompt}
+        Responde de manera técnica, profesional y concisa utilizando terminología aeroespacial.
+        """
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=context_prompt,
+        )
+        return {"response": response.text}
+    except Exception as e:
+        return {"response": f"❌ Error conectando con Gemini API: {str(e)}"}
 
 @app.get("/api/mission/logs")
 async def get_flight_logs():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs ORDER BY id ASC LIMIT 500")
+    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs WHERE mission_id = ? ORDER BY id ASC LIMIT 500", (mission_state["mission_id"],))
     rows = cursor.fetchall()
     conn.close()
-    return {"logs": rows}
+    return {"mission_id": mission_state["mission_id"], "logs": rows}
 
 @app.get("/api/mission/report/pdf")
 async def generate_pdf_report():
     report_file = "flight_report.png"
     if os.path.exists(report_file):
         return FileResponse(report_file, media_type="image/png", filename="flight_report.png")
-    return {"status": "Report generated", "details": "ODYSSEY-1 Telemetry Mission Summary Certified"}
+    return {"status": "Report generated", "details": f"ODYSSEY-1 Telemetry Mission {mission_state['mission_id']} Summary Certified"}
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
@@ -172,8 +194,11 @@ async def websocket_telemetry(websocket: WebSocket):
                 total_duration = 35.0
                 progress = min(mission_state["flight_time"] / total_duration, 1.0)
                 
-                current_lat = mission_state["pad_lat"] + (mission_state["target_lat"] - mission_state["pad_lat"]) * progress
-                current_lon = mission_state["pad_lon"] + (mission_state["target_lon"] - mission_state["pad_lon"]) * progress
+                wind_drift_lat = math.sin(mission_state["flight_time"] * 0.5) * 0.0003
+                wind_drift_lon = math.cos(mission_state["flight_time"] * 0.5) * 0.0003
+                
+                current_lat = mission_state["pad_lat"] + (mission_state["target_lat"] - mission_state["pad_lat"]) * progress + wind_drift_lat
+                current_lon = mission_state["pad_lon"] + (mission_state["target_lon"] - mission_state["pad_lon"]) * progress + wind_drift_lon
                 
                 max_alt = mission_state["target_altitude_km"]
                 raw_alt = max_alt * 4.0 * progress * (1.0 - progress) if progress < 1.0 else 0.0
@@ -206,18 +231,23 @@ async def websocket_telemetry(websocket: WebSocket):
             mission_state["altitude_km"] = round(filtered_alt, 2)
             mission_state["speed_kmh"] = total_speed
 
+            air_density = 1.225 * math.exp(-filtered_alt / 8.5) if filtered_alt < 50 else 0.0
+            dynamic_pressure_kpa = 0.5 * air_density * ((total_speed / 3.6) ** 2) / 1000.0
+            mission_state["dynamic_pressure_kpa"] = round(dynamic_pressure_kpa, 2)
+
             evaluate_fdir()
 
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO flight_logs (timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (mission_state["flight_time"], current_lat, current_lon, mission_state["altitude_km"], mission_state["speed_kmh"], mission_state["roll"], mission_state["pitch"], mission_state["yaw"], mission_state["tvc_x"], mission_state["tvc_y"], mission_state["sequencer_state"])
+                "INSERT INTO flight_logs (mission_id, timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (mission_state["mission_id"], mission_state["flight_time"], current_lat, current_lon, mission_state["altitude_km"], mission_state["speed_kmh"], mission_state["roll"], mission_state["pitch"], mission_state["yaw"], mission_state["tvc_x"], mission_state["tvc_y"], mission_state["sequencer_state"])
             )
             conn.commit()
             conn.close()
 
             telemetry_payload = {
+                "mission_id": mission_state["mission_id"],
                 "flight_time": round(mission_state["flight_time"], 1),
                 "altitude_km": mission_state["altitude_km"],
                 "speed_kmh": mission_state["speed_kmh"],
@@ -226,6 +256,7 @@ async def websocket_telemetry(websocket: WebSocket):
                 "yaw": mission_state["yaw"],
                 "tvc_x": mission_state["tvc_x"],
                 "tvc_y": mission_state["tvc_y"],
+                "dynamic_pressure_kpa": mission_state["dynamic_pressure_kpa"],
                 "active_soi": mission_state["active_soi"],
                 "sequencer_state": mission_state["sequencer_state"],
                 "fdir_status": mission_state["fdir_status"],

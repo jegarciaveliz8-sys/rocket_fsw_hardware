@@ -6,7 +6,7 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["version"] == "1.2.0"
+    assert response.json()["version"] == "1.3.0"
 
 def test_dashboard_endpoint():
     response = client.get("/dashboard")
@@ -33,6 +33,15 @@ def test_failover_endpoint():
     data = response.json()
     assert "active_station" in data
     assert "latency_ms" in data
+
+def test_command_uplink():
+    response = client.post("/api/command", json={"command": "ABORT", "target_module": "TVC_GIMBAL"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "EXECUTED"
+
+def test_export_logs():
+    response = client.get("/api/logs/export")
+    assert response.status_code == 200
 
 def test_websocket_telemetry():
     with client.websocket_connect("/ws/telemetry") as websocket:

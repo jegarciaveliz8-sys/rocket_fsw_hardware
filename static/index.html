@@ -117,6 +117,14 @@
             <input type="number" id="target-lat" value="9.9325" step="any">
             <input type="number" id="target-lon" value="-84.0800" step="any">
             <button onclick="updateMissionCoordinates()">⚡ Sincronizar Ruta</button>
+            
+            <div style="margin-top: 8px; border-top: 1px solid #1e293b; padding-top: 6px;">
+                <label style="color: #a855f7;">🛰️ Gestión de Waypoints (MISSION_INT):</label>
+                <button onclick="addCurrentTargetAsWaypoint()" style="background: #7c3aed; margin-top: 4px;">📍 Agregar Destino como Waypoint</button>
+                <button onclick="uploadWaypoints()" style="background: #16a34a; margin-top: 4px;">📡 Uplink Waypoints MAVLink</button>
+                <button onclick="clearWaypoints()" style="background: #475569; margin-top: 2px; font-size: 9px;">🗑️ Limpiar Waypoints</button>
+                <pre id="waypoint-status" style="margin-top: 4px;">Waypoints: 0 cargados</pre>
+            </div>
         </div>
         
         <div class="panel">
@@ -176,6 +184,8 @@
         let trajectoryCoords = [];
         let loadedLogs = [];
         let autoFollow = false;
+        let missionWaypoints = [];
+        let waypointMarkers = [];
 
         const ctx = document.getElementById('telemetryChart').getContext('2d');
         const telemetryChart = new Chart(ctx, {
@@ -297,6 +307,45 @@
             }
         }
 
+        function addCurrentTargetAsWaypoint() {
+            const lat = parseFloat(document.getElementById('target-lat').value);
+            const lon = parseFloat(document.getElementById('target-lon').value);
+            const seq = missionWaypoints.length;
+            missionWaypoints.push({ lat: lat, lon: lon, alt: 50.0, seq: seq });
+            
+            if (map) {
+                const marker = L.circleMarker([lat, lon], { color: '#a855f7', radius: 7, fillColor: '#a855f7', fillOpacity: 0.8 }).addTo(map).bindPopup(`Waypoint #${seq}`);
+                waypointMarkers.push(marker);
+            }
+            document.getElementById('waypoint-status').innerText = `Waypoints: ${missionWaypoints.length} cargados`;
+        }
+
+        function clearWaypoints() {
+            missionWaypoints = [];
+            waypointMarkers.forEach(m => { if (map) map.removeLayer(m); });
+            waypointMarkers = [];
+            document.getElementById('waypoint-status').innerText = `Waypoints: 0 cargados`;
+        }
+
+        async function uploadWaypoints() {
+            if (missionWaypoints.length === 0) {
+                alert("⚠️ No hay waypoints en la ruta.");
+                return;
+            }
+            try {
+                const res = await fetch('/api/mission/waypoints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ waypoints: missionWaypoints })
+                });
+                if (!res.ok) throw new Error("Error HTTP " + res.status);
+                const data = await res.json();
+                document.getElementById('waypoint-status').innerText = `✅ ${data.message}`;
+            } catch (err) {
+                alert("❌ Error subiendo waypoints: " + err.message);
+            }
+        }
+
         async function queryFieldAI() {
             const promptText = document.getElementById('ai-prompt').value;
             if (!promptText) return;
@@ -325,7 +374,6 @@
                 if (!res.ok) throw new Error("Error HTTP " + res.status);
                 let result = await res.json();
 
-                // Notificación visual (Toast) en el panel de control
                 let toast = document.getElementById('gcs-toast');
                 if (!toast) {
                     toast = document.createElement('div');

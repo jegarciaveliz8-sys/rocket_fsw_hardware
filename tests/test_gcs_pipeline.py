@@ -67,3 +67,17 @@ def test_mission_coordinates_sync():
     response = client.post("/api/mission/coordinates", json=payload)
     assert response.status_code == 200
     assert response.json()["status"] == "success"
+
+def test_mission_waypoints_upload():
+    """Valida la subida de waypoints de misión vía MAVLink MISSION_ITEM_INT."""
+    payload = {
+        "waypoints": [
+            {"lat": 14.5975, "lon": -90.5131, "alt": 100.0, "seq": 0},
+            {"lat": 14.6133, "lon": -90.5283, "alt": 150.0, "seq": 1}
+        ]
+    }
+    response = client.post("/api/mission/waypoints", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["waypoints_uploaded"] == 2

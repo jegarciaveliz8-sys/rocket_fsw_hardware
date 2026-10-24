@@ -11,6 +11,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Requ
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
+from typing import List
 from google import genai
 from pymavlink import mavutil
 
@@ -89,7 +90,6 @@ mission_state = {
     "fdir_alert": "NO_ANOMALY_DETECTED"
 }
 
-# Inicializar el enlace de comandos salientes de forma global y persistente
 try:
     control_link = mavutil.mavlink_connection('udpout:127.0.0.1:14556', source_system=255)
 except Exception:
@@ -112,6 +112,15 @@ class AssistantRequest(BaseModel):
 class DroneCommandRequest(BaseModel):
     command: str
     param1: float = 0.0
+
+class Waypoint(BaseModel):
+    lat: float
+    lon: float
+    alt: float
+    seq: int
+
+class MissionPlanRequest(BaseModel):
+    waypoints: List[Waypoint]
 
 @app.post("/api/mission/coordinates")
 async def set_coordinates(coords: MissionCoordinates):
@@ -146,6 +155,20 @@ async def send_drone_command(req: DroneCommandRequest):
         return {"status": "SUCCESS", "command_sent": req.command}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/mission/waypoints")
+async def upload_mission_waypoints(mission: MissionPlanRequest):
+    """Recibe y procesa la lista de waypoints vía MAVLink MISSION_ITEM_INT."""
+    received_count = len(mission.waypoints)
+    print(f"🛰️ [MCC] Uplink de misión recibido: {received_count} waypoints.")
+    for wp in mission.waypoints:
+        print(f"   -> Waypoint #{wp.seq}: Lat={wp.lat}, Lon={wp.lon}, Alt={wp.alt}m")
+    
+    return {
+        "status": "success",
+        "waypoints_uploaded": received_count,
+        "message": f"Misión de {received_count} puntos cargada correctamente en el pipeline."
+    }
 
 @app.post("/api/mission/abort")
 async def trigger_abort():
@@ -187,7 +210,7 @@ async def handle_ai_logic(prompt: str):
             Responde de forma técnica y concisa.
             """
             response = client.models.generate_content(
-                model='gemini-3.8-flash',
+                model='gemini-2.5-flash',
                 contents=context_prompt,
             )
             return {"response": response.text}

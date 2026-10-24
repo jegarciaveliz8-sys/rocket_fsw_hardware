@@ -90,6 +90,12 @@ mission_state = {
     "fdir_alert": "NO_ANOMALY_DETECTED"
 }
 
+ai_proactive_audit = {
+    "last_alert": "Sistema nominal. Auditoría continua activa.",
+    "alert_level": "INFO",
+    "timestamp": 0.0
+}
+
 try:
     control_link = mavutil.mavlink_connection('udpout:127.0.0.1:14556', source_system=255)
 except Exception:
@@ -173,6 +179,7 @@ async def trigger_abort():
     mission_state["sequencer_state"] = "ABORT_MISSION_LES_TRIGGERED"
     mission_state["fdir_status"] = "CRITICAL"
     mission_state["fdir_alert"] = "MANUAL_ABORT_FTS_ACTIVATED"
+    asyncio.create_task(run_proactive_ai_audit("ABORT_TRIGGERED_BY_OPERATOR"))
     return {"status": "ABORT_SEQUENCE_ACTIVATED"}
 
 @app.post("/api/orbit/plan")
@@ -190,6 +197,30 @@ async def plan_orbit(req: OrbitPlanRequest):
         }
     }
 
+async def run_proactive_ai_audit(trigger_event: str):
+    try:
+        client = genai.Client()
+        prompt = f"""
+        [SISTEMA DE AUDITORÍA AUTÓNOMA GCS ODYSSEY-1]
+        EVENTO DETECTADO: {trigger_event}
+        Misión ID: {mission_state['mission_id']} | Tiempo de Vuelo: T+{mission_state['flight_time']:.1f}s
+        Altitud: {mission_state['altitude_km']} km | Velocidad: {mission_state['speed_kmh']} km/h
+        FDIR Status: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+        Presión Dinámica: {mission_state['dynamic_pressure_kpa']} kPa
+        
+        Emite una evaluación de riesgo operacional ultraconcisa (máximo 2 frases) y una acción recomendada.
+        """
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        ai_proactive_audit["last_alert"] = response.text
+        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
+        ai_proactive_audit["timestamp"] = mission_state["flight_time"]
+    except Exception as e:
+        ai_proactive_audit["last_alert"] = f"⚠️ AUDITORÍA AUTÓNOMA: {trigger_event} - {mission_state['fdir_alert']}"
+        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
+
 async def handle_ai_logic(prompt: str):
     max_retries = 2
     for attempt in range(max_retries):
@@ -202,6 +233,7 @@ async def handle_ai_logic(prompt: str):
             - Velocidad: {mission_state['speed_kmh']} km/h
             - Estado FSM: {mission_state['sequencer_state']}
             - FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+            - Última Auditoría Proactiva IA: {ai_proactive_audit['last_alert']}
             
             Consulta del operador: {prompt}
             Responde de forma técnica y concisa.
@@ -210,10 +242,10 @@ async def handle_ai_logic(prompt: str):
                 model='gemini-2.5-flash',
                 contents=context_prompt,
             )
-            return {"response": response.text}
+            return {"response": response.text, "proactive_audit": ai_proactive_audit}
         except Exception:
             if attempt == max_retries - 1:
-                return {"response": f"⚠️ ENLACE IA DEGRADADO: Subsistemas locales nominales."}
+                return {"response": f"⚠️ ENLACE IA DEGRADADO: Subsistemas locales nominales.", "proactive_audit": ai_proactive_audit}
             await asyncio.sleep(1)
 
 async def parse_prompt_from_request(req: AssistantRequest, request: Request):
@@ -293,6 +325,7 @@ async def websocket_telemetry(websocket: WebSocket):
 
     dt = 0.1
     last_mavlink_time = 0.0
+    last_fdir_status = "NOMINAL"
     fleet_vehicles = {
         1: {"lat": mission_state["pad_lat"], "lon": mission_state["pad_lon"], "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
         2: {"lat": mission_state["pad_lat"] + 0.002, "lon": mission_state["pad_lon"] + 0.002, "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
@@ -347,6 +380,10 @@ async def websocket_telemetry(websocket: WebSocket):
                         mission_state["fdir_status"] = "NOMINAL"
                         mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
                 
+                if mission_state["fdir_status"] != last_fdir_status:
+                    asyncio.create_task(run_proactive_ai_audit(f"FDIR_STATE_CHANGE: {mission_state['fdir_status']}"))
+                    last_fdir_status = mission_state["fdir_status"]
+
                 telemetry_payload = {
                     "status": "SITL_ACTIVE",
                     "mission_id": mission_state["mission_id"],
@@ -369,6 +406,7 @@ async def websocket_telemetry(websocket: WebSocket):
                     "sequencer_state": "AUTONOMOUS_GUIDED_FLIGHT",
                     "fdir_status": mission_state["fdir_status"],
                     "fdir_alert": mission_state["fdir_alert"],
+                    "proactive_audit": ai_proactive_audit,
                     "dsn_station": mission_state["dsn_station"],
                     "hil_mode": "GAZEBO_SITL_SIMULATION",
                     "vehicles": fleet_vehicles,
@@ -387,7 +425,6 @@ async def websocket_telemetry(websocket: WebSocket):
                     wind_lat = math.sin(mission_state["flight_time"] * 0.5) * 0.0003
                     wind_lon = math.cos(mission_state["flight_time"] * 0.5) * 0.0003
                     
-                    # Vehículo líder (ID 1)
                     current_lat = mission_state["pad_lat"] + (mission_state["target_lat"] - mission_state["pad_lat"]) * progress + wind_lat
                     current_lon = mission_state["pad_lon"] + (mission_state["target_lon"] - mission_state["pad_lon"]) * progress + wind_lon
                     max_alt = mission_state["target_altitude_km"]
@@ -411,7 +448,6 @@ async def websocket_telemetry(websocket: WebSocket):
                         total_speed = 2200.0
                     mission_state["sequencer_state"] = fsm_status
 
-                    # Actualizar Flota Virtual (Líder ID 1 y Escolta ID 2 desfasado)
                     fleet_vehicles[1] = {
                         "lat": current_lat, "lon": current_lon, "alt": filtered_alt,
                         "speed": total_speed, "roll": mission_state["roll"], "pitch": mission_state["pitch"], "yaw": mission_state["yaw"]
@@ -440,6 +476,10 @@ async def websocket_telemetry(websocket: WebSocket):
                         mission_state["fdir_status"] = "NOMINAL"
                         mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
 
+                if mission_state["fdir_status"] != last_fdir_status:
+                    asyncio.create_task(run_proactive_ai_audit(f"FDIR_STATE_CHANGE: {mission_state['fdir_status']}"))
+                    last_fdir_status = mission_state["fdir_status"]
+
                 telemetry_payload = {
                     "status": "POWERED ASCENT",
                     "mission_id": mission_state["mission_id"],
@@ -462,6 +502,7 @@ async def websocket_telemetry(websocket: WebSocket):
                     "sequencer_state": mission_state["sequencer_state"],
                     "fdir_status": mission_state["fdir_status"],
                     "fdir_alert": mission_state["fdir_alert"],
+                    "proactive_audit": ai_proactive_audit,
                     "dsn_station": mission_state["dsn_station"],
                     "hil_mode": mission_state["hil_mode"],
                     "vehicles": fleet_vehicles,

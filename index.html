@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 Mission Control Dashboard</title>
+    <style>
+        body { background-color: #0b0f19; color: #00ffcc; font-family: monospace; margin: 0; padding: 20px; }
+        h1 { text-align: center; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; }
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .metric { font-size: 24px; font-weight: bold; color: #ffffff; margin-top: 10px; }
+        .status-ok { color: #10b981; }
+    </style>
+</head>
+<body>
+    <h1>ODYSSEY-1 GCS - Mission Control Center</h1>
+    <div class="grid">
+        <div class="card">
+            <h3>Altitud Actual</h3>
+            <div id="alt" class="metric">-- m</div>
+        </div>
+        <div class="card">
+            <h3>Velocidad</h3>
+            <div id="spd" class="metric">-- m/s</div>
+        </div>
+        <div class="card">
+            <h3>Temperatura Carga Útil</h3>
+            <div id="temp" class="metric">-- °C</div>
+        </div>
+        <div class="card">
+            <h3>Estado del Enlace (Failover)</h3>
+            <div id="station" class="metric status-ok">--</div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            document.getElementById("alt").innerText = data.altitude.toFixed(2) + " m";
+            document.getElementById("spd").innerText = data.speed.toFixed(2) + " m/s";
+            document.getElementById("temp").innerText = data.payload.temperature_c + " °C";
+            document.getElementById("station").innerText = data.failover.active_station + " (" + data.failover.latency_ms + "ms)";
+        };
+    </script>
+</body>
+</html>

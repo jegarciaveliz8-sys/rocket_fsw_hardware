@@ -2,9 +2,10 @@ import os
 import sqlite3
 import random
 import json
+import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "flight_recorder.db")
@@ -40,17 +41,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="ODYSSEY-1 GCS Enterprise", version="1.1.0", lifespan=lifespan)
 
 class PayloadProcessor:
-    def __init__(self):
-        self.sensor_data = {}
-
     def ingest_telemetry(self):
-        self.sensor_data = {
+        return {
             "temperature_c": round(random.uniform(20.0, 85.5), 2),
             "radiation_msv": round(random.uniform(0.05, 1.2), 4),
             "internal_pressure_kpa": round(random.uniform(100.0, 101.3), 2),
             "status": "PAYLOAD_NOMINAL"
         }
-        return self.sensor_data
 
 class MissionParser:
     def __init__(self, file_path="mission_plan.json"):
@@ -87,9 +84,34 @@ payload_mgr = PayloadProcessor()
 mission_mgr = MissionParser()
 failover_mgr = StationFailoverManager()
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
+
 @app.get("/")
 def read_root():
     return {"status": "ONLINE", "system": "ODYSSEY-1 GCS", "version": "1.1.0"}
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def get_dashboard():
+    html_path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r") as f:
+            return f.read()
+    return "<h1>Dashboard HTML no encontrado</h1>"
 
 @app.get("/api/payload")
 def get_payload_data():
@@ -102,3 +124,19 @@ def get_mission_plan():
 @app.get("/api/failover")
 def get_failover_status():
     return failover_mgr.check_link_health()
+
+@app.websocket("/ws/telemetry")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            telemetry_packet = {
+                "altitude": round(random.uniform(0, 45000), 2),
+                "speed": round(random.uniform(0, 1200), 2),
+                "payload": payload_mgr.ingest_telemetry(),
+                "failover": failover_mgr.check_link_health()
+            }
+            await websocket.send_text(json.dumps(telemetry_packet))
+            await asyncio.sleep(1)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)

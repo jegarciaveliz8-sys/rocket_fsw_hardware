@@ -1,8 +1,6 @@
 fastapi
 uvicorn
-numpy
-crccheck
 google-genai
-paho-mqtt
-redis
+pymavlink
+pyserial
 pydantic

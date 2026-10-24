@@ -132,6 +132,8 @@ async def set_coordinates(coords: MissionCoordinates):
     mission_state["sequencer_state"] = "POWERED_FLIGHT_PROPULSION"
     mission_state["abort_triggered"] = False
     mission_state["flight_time"] = 0.0
+    mission_state["fdir_status"] = "NOMINAL"
+    mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
     return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.model_dump()}
 
 @app.post("/api/drone/command")
@@ -158,12 +160,7 @@ async def send_drone_command(req: DroneCommandRequest):
 
 @app.post("/api/mission/waypoints")
 async def upload_mission_waypoints(mission: MissionPlanRequest):
-    """Recibe y procesa la lista de waypoints vía MAVLink MISSION_ITEM_INT."""
     received_count = len(mission.waypoints)
-    print(f"🛰️ [MCC] Uplink de misión recibido: {received_count} waypoints.")
-    for wp in mission.waypoints:
-        print(f"   -> Waypoint #{wp.seq}: Lat={wp.lat}, Lon={wp.lon}, Alt={wp.alt}m")
-    
     return {
         "status": "success",
         "waypoints_uploaded": received_count,
@@ -269,11 +266,11 @@ def generate_csv_response():
         csv_data += f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{r[5]}\n"
     return PlainTextResponse(csv_data, media_type="text/csv")
 
-@app.get("/export/csv")
-@app.get("/api/export/csv")
-@app.get("/api/mission/export")
-@app.get("/api/mission/export-csv")
-@app.get("/api/mission/export/csv")
+@app.get("/export/csv", operation_id="export_csv_root")
+@app.get("/api/export/csv", operation_id="export_csv_api")
+@app.get("/api/mission/export", operation_id="export_mission_export")
+@app.get("/api/mission/export-csv", operation_id="export_mission_export_csv")
+@app.get("/api/mission/export/csv", operation_id="export_mission_export_csv_slash")
 async def export_csv_endpoint():
     return generate_csv_response()
 
@@ -296,13 +293,10 @@ async def websocket_telemetry(websocket: WebSocket):
 
     dt = 0.1
     last_mavlink_time = 0.0
-    mav_lat = mission_state["pad_lat"]
-    mav_lon = mission_state["pad_lon"]
-    mav_alt = 0.0
-    mav_speed = 0.0
-    mav_roll = 0.0
-    mav_pitch = 0.0
-    mav_yaw = 0.0
+    fleet_vehicles = {
+        1: {"lat": mission_state["pad_lat"], "lon": mission_state["pad_lon"], "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0},
+        2: {"lat": mission_state["pad_lat"] + 0.002, "lon": mission_state["pad_lon"] + 0.002, "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
+    }
 
     try:
         while True:
@@ -314,17 +308,21 @@ async def websocket_telemetry(websocket: WebSocket):
                         if not msg:
                             break
                         msg_type = msg.get_type()
+                        sys_id = getattr(msg, 'get_srcSystem', lambda: 1)()
+                        if sys_id not in fleet_vehicles:
+                            fleet_vehicles[sys_id] = {"lat": mission_state["pad_lat"], "lon": mission_state["pad_lon"], "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
+
                         if msg_type == 'GLOBAL_POSITION_INT':
-                            mav_lat = msg.lat / 1e7
-                            mav_lon = msg.lon / 1e7
-                            mav_alt = (msg.relative_alt / 1000.0) / 1000.0
+                            fleet_vehicles[sys_id]["lat"] = msg.lat / 1e7
+                            fleet_vehicles[sys_id]["lon"] = msg.lon / 1e7
+                            fleet_vehicles[sys_id]["alt"] = (msg.relative_alt / 1000.0) / 1000.0
                             speed_ms = ((msg.vx**2 + msg.vy**2 + msg.vz**2)**0.5) / 100.0
-                            mav_speed = round(speed_ms * 3.6, 1)
+                            fleet_vehicles[sys_id]["speed"] = round(speed_ms * 3.6, 1)
                             last_mavlink_time = asyncio.get_event_loop().time()
                         elif msg_type == 'ATTITUDE':
-                            mav_roll = round(math.degrees(msg.roll), 2)
-                            mav_pitch = round(math.degrees(msg.pitch), 2)
-                            mav_yaw = round(math.degrees(msg.yaw), 2)
+                            fleet_vehicles[sys_id]["roll"] = round(math.degrees(msg.roll), 2)
+                            fleet_vehicles[sys_id]["pitch"] = round(math.degrees(msg.pitch), 2)
+                            fleet_vehicles[sys_id]["yaw"] = round(math.degrees(msg.yaw), 2)
                             last_mavlink_time = asyncio.get_event_loop().time()
                 except Exception:
                     pass
@@ -333,37 +331,51 @@ async def websocket_telemetry(websocket: WebSocket):
             if current_time - last_mavlink_time < 2.0:
                 mission_state["hil_mode"] = "GAZEBO_SITL_SIMULATION"
                 mission_state["flight_time"] += dt
-                mission_state["altitude_km"] = mav_alt
-                mission_state["speed_kmh"] = mav_speed
+                primary_v = fleet_vehicles.get(1, list(fleet_vehicles.values())[0])
+                
+                mission_state["altitude_km"] = primary_v["alt"]
+                mission_state["speed_kmh"] = primary_v["speed"]
+                mission_state["roll"] = primary_v["roll"]
+                mission_state["pitch"] = primary_v["pitch"]
+                mission_state["yaw"] = primary_v["yaw"]
+
+                if abs(primary_v["roll"]) > 40.0 or abs(primary_v["pitch"]) > 60.0:
+                    mission_state["fdir_status"] = "CRITICAL"
+                    mission_state["fdir_alert"] = "ATTITUDE_EXCURSION_LIMIT_EXCEEDED"
+                else:
+                    if not mission_state["abort_triggered"]:
+                        mission_state["fdir_status"] = "NOMINAL"
+                        mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
                 
                 telemetry_payload = {
                     "status": "SITL_ACTIVE",
                     "mission_id": mission_state["mission_id"],
                     "flight_time": round(mission_state["flight_time"], 1),
-                    "altitude": mav_alt,
-                    "altitude_km": mav_alt,
-                    "speed": mav_speed,
-                    "speed_kmh": mav_speed,
-                    "velocity": mav_speed,
-                    "lat": round(mav_lat, 5),
-                    "lon": round(mav_lon, 5),
+                    "altitude": primary_v["alt"],
+                    "altitude_km": primary_v["alt"],
+                    "speed": primary_v["speed"],
+                    "speed_kmh": primary_v["speed"],
+                    "velocity": primary_v["speed"],
+                    "lat": round(primary_v["lat"], 5),
+                    "lon": round(primary_v["lon"], 5),
                     "fsm_state": "AUTONOMOUS_GUIDED_FLIGHT",
-                    "roll": mav_roll,
-                    "pitch": mav_pitch,
-                    "yaw": mav_yaw,
+                    "roll": primary_v["roll"],
+                    "pitch": primary_v["pitch"],
+                    "yaw": primary_v["yaw"],
                     "tvc_x": 0.0,
                     "tvc_y": 0.0,
                     "dynamic_pressure_kpa": 0.0,
                     "active_soi": mission_state["active_soi"],
                     "sequencer_state": "AUTONOMOUS_GUIDED_FLIGHT",
-                    "fdir_status": "NOMINAL",
-                    "fdir_alert": "NO_ANOMALY_DETECTED",
+                    "fdir_status": mission_state["fdir_status"],
+                    "fdir_alert": mission_state["fdir_alert"],
                     "dsn_station": mission_state["dsn_station"],
                     "hil_mode": "GAZEBO_SITL_SIMULATION",
+                    "vehicles": fleet_vehicles,
                     "geodetic": {
-                        "lat": round(mav_lat, 5),
-                        "lon": round(mav_lon, 5),
-                        "alt": round(mav_alt * 1000.0, 1)
+                        "lat": round(primary_v["lat"], 5),
+                        "lon": round(primary_v["lon"], 5),
+                        "alt": round(primary_v["alt"] * 1000.0, 1)
                     }
                 }
             else:
@@ -374,11 +386,14 @@ async def websocket_telemetry(websocket: WebSocket):
                     progress = min(mission_state["flight_time"] / total_duration, 1.0)
                     wind_lat = math.sin(mission_state["flight_time"] * 0.5) * 0.0003
                     wind_lon = math.cos(mission_state["flight_time"] * 0.5) * 0.0003
+                    
+                    # Vehículo líder (ID 1)
                     current_lat = mission_state["pad_lat"] + (mission_state["target_lat"] - mission_state["pad_lat"]) * progress + wind_lat
                     current_lon = mission_state["pad_lon"] + (mission_state["target_lon"] - mission_state["pad_lon"]) * progress + wind_lon
                     max_alt = mission_state["target_altitude_km"]
                     raw_alt = max_alt * 4.0 * progress * (1.0 - progress) if progress < 1.0 else 0.0
                     filtered_alt = ekf.update(raw_alt, dt)
+                    
                     mission_state["roll"] = round(math.sin(mission_state["flight_time"] * 3.0) * 8.0, 2)
                     mission_state["pitch"] = round(45.0 * (1.0 - progress) + 5.0 * math.cos(mission_state["flight_time"]), 2)
                     mission_state["yaw"] = round(math.atan2(mission_state["target_lat"] - mission_state["pad_lat"], mission_state["target_lon"] - mission_state["pad_lon"]) * 180 / math.pi, 2)
@@ -395,6 +410,16 @@ async def websocket_telemetry(websocket: WebSocket):
                         fsm_status = "BALISTIC_MIDCOURSE_GUIDANCE"
                         total_speed = 2200.0
                     mission_state["sequencer_state"] = fsm_status
+
+                    # Actualizar Flota Virtual (Líder ID 1 y Escolta ID 2 desfasado)
+                    fleet_vehicles[1] = {
+                        "lat": current_lat, "lon": current_lon, "alt": filtered_alt,
+                        "speed": total_speed, "roll": mission_state["roll"], "pitch": mission_state["pitch"], "yaw": mission_state["yaw"]
+                    }
+                    fleet_vehicles[2] = {
+                        "lat": current_lat - 0.0015, "lon": current_lon - 0.0015, "alt": max(filtered_alt - 0.5, 0.0),
+                        "speed": total_speed * 0.98, "roll": mission_state["roll"] * 0.9, "pitch": mission_state["pitch"], "yaw": mission_state["yaw"]
+                    }
                 else:
                     current_lat = mission_state["target_lat"]
                     current_lon = mission_state["target_lon"]
@@ -406,6 +431,14 @@ async def websocket_telemetry(websocket: WebSocket):
                 air_density = 1.225 * math.exp(-filtered_alt / 8.5) if filtered_alt < 50 else 0.0
                 dynamic_pressure_kpa = 0.5 * air_density * ((total_speed / 3.6) ** 2) / 1000.0
                 mission_state["dynamic_pressure_kpa"] = round(dynamic_pressure_kpa, 2)
+
+                if mission_state["dynamic_pressure_kpa"] > 110.0:
+                    mission_state["fdir_status"] = "WARNING"
+                    mission_state["fdir_alert"] = "STRUCTURAL_Q_LIMIT_WARNING"
+                else:
+                    if not mission_state["abort_triggered"]:
+                        mission_state["fdir_status"] = "NOMINAL"
+                        mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
 
                 telemetry_payload = {
                     "status": "POWERED ASCENT",
@@ -431,6 +464,7 @@ async def websocket_telemetry(websocket: WebSocket):
                     "fdir_alert": mission_state["fdir_alert"],
                     "dsn_station": mission_state["dsn_station"],
                     "hil_mode": mission_state["hil_mode"],
+                    "vehicles": fleet_vehicles,
                     "geodetic": {
                         "lat": round(current_lat, 5),
                         "lon": round(current_lon, 5),

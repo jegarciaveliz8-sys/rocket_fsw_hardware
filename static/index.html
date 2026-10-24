@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | World-Class Aerospace MCC</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -11,9 +12,10 @@
         header { border-bottom: 2px solid #00ffcc; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         h1 { margin: 0; font-size: 18px; color: #ffffff; text-shadow: 0 0 10px #00ffcc; }
         .layout { display: grid; grid-template-columns: 2.3fr 1fr; gap: 12px; margin-bottom: 10px; }
-        .layout-dual { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+        .layout-triple { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 10px; }
         .panel { background: #0b1329; border: 1px solid #1e293b; border-radius: 6px; padding: 10px; box-sizing: border-box; }
         #mapContainer { width: 100%; height: 320px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; cursor: crosshair; }
+        #attitude3DContainer { width: 100%; height: 140px; border-radius: 4px; overflow: hidden; position: relative; background: #020617; }
         .metric { font-size: 15px; font-weight: bold; color: #f3f4f6; margin: 2px 0; }
         input, select, textarea { width: 100%; background: #111827; color: #fff; border: 1px solid #374151; padding: 5px; box-sizing: border-box; border-radius: 4px; margin-bottom: 6px; font-family: monospace; }
         label { font-size: 10px; color: #38bdf8; display: block; margin-top: 2px; font-weight: bold; }
@@ -34,16 +36,16 @@
 <body>
     <header>
         <h1>🚀 ODYSSEY-1 | ADVANCED FLIGHT SOFTWARE & MCC</h1>
-        <div id="status" style="color: #00ffcc;">● TELEMETRY LINK: ACTIVE</div>
+        <div id="status" style="color: #00ffcc;">● TELEMETRY LINK: ACTIVE (FLEET MODE)</div>
     </header>
 
     <div class="layout">
         <div class="panel" style="position: relative;">
-            <h3>🌐 Visualización Geoespacial (Mapa Táctico HD Satelital)</h3>
+            <h3>🌐 Visualización Geoespacial & Enjambre de Flota</h3>
             <div class="cam-controls">
                 <span style="font-size: 9px; color: #fff;">VISTA:</span>
                 <button onclick="setCamMode('tactical')">🎯 Táctica</button>
-                <button onclick="setCamMode('chase')">🚀 Seguir Nave</button>
+                <button onclick="setCamMode('chase')">🚀 Seguir Líder</button>
                 <button onclick="setCamMode('global')">🌍 Global</button>
             </div>
             <div id="mapContainer"></div>
@@ -77,16 +79,20 @@
         </div>
     </div>
 
-    <div class="layout-dual">
+    <div class="layout-triple">
         <div class="panel">
-            <h3>📈 Gráficas de Telemetría en Vivo (Altitud & Velocidad vs T+)</h3>
+            <h3>📈 Gráficas de Telemetría en Vivo</h3>
             <div style="height: 140px; width: 100%;">
                 <canvas id="telemetryChart"></canvas>
             </div>
         </div>
         <div class="panel">
-            <h3>🤖 Asistente IA de Campo (Gemini FSW Uplink)</h3>
-            <textarea id="ai-prompt" rows="2" placeholder="Escribe consulta de telemetría o auditoría..."></textarea>
+            <h3>🛸 Actitud 3D (Three.js FSW)</h3>
+            <div id="attitude3DContainer"></div>
+        </div>
+        <div class="panel">
+            <h3>🤖 Asistente IA de Campo</h3>
+            <textarea id="ai-prompt" rows="2" placeholder="Consulta de telemetría..."></textarea>
             <button onclick="queryFieldAI()" style="background: #8b5cf6;">Enviar Consulta a IA</button>
             <pre id="ai-response">IA en standby...</pre>
         </div>
@@ -162,7 +168,60 @@
                     fdirBox.after(container);
                 }
             }
+            init3D();
         });
+
+        // Three.js 3D Attitude Setup
+        let scene3D, camera3D, renderer3D, rocketMesh;
+        function init3D() {
+            const container = document.getElementById('attitude3DContainer');
+            if (!container) return;
+            scene3D = new THREE.Scene();
+            camera3D = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera3D.position.set(0, 0, 4.5);
+
+            renderer3D = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer3D.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer3D.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+            scene3D.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0x00ffcc, 1);
+            directionalLight.position.set(5, 10, 7);
+            scene3D.add(directionalLight);
+
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.6, roughness: 0.2 });
+            const tipMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.3, roughness: 0.4 });
+            
+            const bodyGeo = new THREE.CylinderGeometry(0.25, 0.25, 1.6, 16);
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            group.add(bodyMesh);
+
+            const tipGeo = new THREE.ConeGeometry(0.25, 0.7, 16);
+            const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+            tipMesh.position.y = 1.15;
+            group.add(tipMesh);
+
+            rocketMesh = group;
+            scene3D.add(rocketMesh);
+
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+            if (renderer3D && scene3D && camera3D) {
+                renderer3D.render(scene3D, camera3D);
+            }
+        }
+
+        function updateRocketAttitude(rollDeg, pitchDeg, yawDeg) {
+            if (!rocketMesh) return;
+            rocketMesh.rotation.x = THREE.MathUtils.degToRad(pitchDeg);
+            rocketMesh.rotation.y = THREE.MathUtils.degToRad(yawDeg);
+            rocketMesh.rotation.z = THREE.MathUtils.degToRad(-rollDeg);
+        }
 
         let table = [];
         for (let i = 0; i < 256; i++) {
@@ -180,7 +239,9 @@
             return (crc ^ (-1)) >>> 0;
         }
 
-        let map = null, padMarker = null, targetMarker = null, vesselMarker = null, trajectoryPolyline = null;
+        let map = null, padMarker = null, targetMarker = null;
+        let vehicleMarkers = {};
+        let vehicleTrajectories = {};
         let trajectoryCoords = [];
         let loadedLogs = [];
         let autoFollow = false;
@@ -266,10 +327,6 @@
 
             padMarker = L.circleMarker([pLat, pLon], { color: 'orange', radius: 8, fillColor: 'orange', fillOpacity: 0.8 }).addTo(map).bindPopup("Pad de Salida");
             targetMarker = L.circleMarker([tLat, tLon], { color: 'red', radius: 10, fillColor: 'red', fillOpacity: 0.8 }).addTo(map).bindPopup("Zona de Destino");
-            vesselMarker = L.circleMarker([pLat, pLon], { color: '#00ffcc', radius: 9, fillColor: '#00ffcc', fillOpacity: 1 }).addTo(map).bindPopup("Nave ODYSSEY-1");
-
-            trajectoryCoords = [[pLat, pLon]];
-            trajectoryPolyline = L.polyline(trajectoryCoords, { color: '#f59e0b', weight: 4 }).addTo(map);
 
             map.on('click', function(e) {
                 const clickLat = e.latlng.lat.toFixed(6);
@@ -300,7 +357,7 @@
                 map.fitBounds([[pLat, pLon], [tLat, tLon]], { padding: [30, 30] });
             } else if (mode === 'chase') {
                 autoFollow = true;
-                if (vesselMarker) map.setView(vesselMarker.getLatLng(), 17);
+                if (vehicleMarkers[1]) map.setView(vehicleMarkers[1].getLatLng(), 17);
             } else if (mode === 'global') {
                 autoFollow = false;
                 map.setView([15.0, -90.0], 6);
@@ -411,16 +468,21 @@
             
             const altKm = Number(data.altitude_km ?? 0);
             const speedKmh = Number(data.speed_kmh ?? 0);
+            const roll = data.roll ?? 0;
+            const pitch = data.pitch ?? 0;
+            const yaw = data.yaw ?? 0;
 
             document.getElementById('alt').innerText = altKm.toFixed(2) + " km";
             document.getElementById('vel').innerText = speedKmh.toFixed(1) + " km/h";
-            document.getElementById('att-roll').innerText = (data.roll ?? 0) + "°";
-            document.getElementById('att-pitch').innerText = (data.pitch ?? 0) + "°";
-            document.getElementById('att-yaw').innerText = (data.yaw ?? 0) + "°";
+            document.getElementById('att-roll').innerText = roll + "°";
+            document.getElementById('att-pitch').innerText = pitch + "°";
+            document.getElementById('att-yaw').innerText = yaw + "°";
             document.getElementById('tvc-x').innerText = (data.tvc_x ?? 0) + "°";
             document.getElementById('tvc-y').innerText = (data.tvc_y ?? 0) + "°";
             document.getElementById('fsm').innerText = data.sequencer_state ?? 'RUNNING';
             document.getElementById('hil').innerText = data.hil_mode ?? 'VIRTUAL';
+
+            updateRocketAttitude(roll, pitch, yaw);
 
             const fdirBox = document.getElementById('fdir-box');
             fdirBox.innerText = `FDIR: ${data.fdir_status} | ${data.fdir_alert}`;
@@ -438,26 +500,36 @@
                 telemetryChart.update();
             }
 
-            if (data.geodetic) {
-                const lat = data.geodetic.lat;
-                const lon = data.geodetic.lon;
-
+            // Renderizar Flota Multi-Vehículo en el Mapa
+            if (data.vehicles) {
                 if (!map) initMap();
+                for (let [sysId, vData] of Object.entries(data.vehicles)) {
+                    let vLat = vData.lat;
+                    let vLon = vData.lon;
+                    let vColor = (sysId == "1") ? "#00ffcc" : "#a855f7"; // Líder cian, Escolta morado
+                    let vName = (sysId == "1") ? "Líder ODYSSEY-1" : `Escolta Fleet #${sysId}`;
 
-                if (map && vesselMarker) {
-                    vesselMarker.setLatLng([lat, lon]);
-                    trajectoryCoords.push([lat, lon]);
-                    if (trajectoryCoords.length > 400) trajectoryCoords.shift();
-                    trajectoryPolyline.setLatLngs(trajectoryCoords);
+                    if (!vehicleMarkers[sysId]) {
+                        vehicleMarkers[sysId] = L.circleMarker([vLat, vLon], { color: vColor, radius: sysId == "1" ? 9 : 7, fillColor: vColor, fillOpacity: 1 }).addTo(map).bindPopup(vName);
+                        vehicleTrajectories[sysId] = { coords: [[vLat, vLon]], poly: L.polyline([[vLat, vLon]], { color: vColor, weight: sysId == "1" ? 4 : 2, opacity: 0.8 }).addTo(map) };
+                    } else {
+                        vehicleMarkers[sysId].setLatLng([vLat, vLon]);
+                        let traj = vehicleTrajectories[sysId];
+                        traj.coords.push([vLat, vLon]);
+                        if (traj.coords.length > 400) traj.coords.shift();
+                        traj.poly.setLatLngs(traj.coords);
+                    }
 
-                    if (autoFollow) {
-                        map.panTo([lat, lon]);
+                    if (sysId == "1" && autoFollow && map) {
+                        map.panTo([vLat, vLon]);
                     }
                 }
+            }
 
+            if (data.geodetic) {
                 const tLat = parseFloat(document.getElementById('target-lat').value);
                 const tLon = parseFloat(document.getElementById('target-lon').value);
-                document.getElementById('dist-target').innerText = calculateHaversineDistance(lat, lon, tLat, tLon).toFixed(2) + " km";
+                document.getElementById('dist-target').innerText = calculateHaversineDistance(data.geodetic.lat, data.geodetic.lon, tLat, tLon).toFixed(2) + " km";
             }
         };
 
@@ -480,9 +552,6 @@
                 } else {
                     if (padMarker) padMarker.setLatLng([pLat, pLon]);
                     if (targetMarker) targetMarker.setLatLng([tLat, tLon]);
-                    if (vesselMarker) vesselMarker.setLatLng([pLat, pLon]);
-                    trajectoryCoords = [[pLat, pLon]];
-                    if (trajectoryPolyline) trajectoryPolyline.setLatLngs(trajectoryCoords);
                 }
             } catch (err) {
                 console.error("Error al sincronizar ruta: ", err);
@@ -561,8 +630,10 @@
             document.getElementById('tvc-y').innerText = log[9] + "°";
             document.getElementById('fsm').innerText = log[10];
 
-            if (map && vesselMarker) {
-                vesselMarker.setLatLng([log[1], log[2]]);
+            updateRocketAttitude(log[5], log[6], log[7]);
+
+            if (map && vehicleMarkers[1]) {
+                vehicleMarkers[1].setLatLng([log[1], log[2]]);
             }
             document.getElementById('log-status').innerText = `DVR Frame ${index}/${loadedLogs.length - 1} (T+${log[0]}s)`;
         }

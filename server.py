@@ -14,12 +14,15 @@ from pydantic import BaseModel
 from typing import List
 from google import genai
 from pymavlink import mavutil
+from autonomous_recovery import AutonomousFDIRHandler
 
 app = FastAPI(title="ODYSSEY-1 Ground Control Station (GCS)")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "flight_recorder.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+fdir_ai_handler = AutonomousFDIRHandler()
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -87,7 +90,8 @@ mission_state = {
     "abort_triggered": False,
     "flight_time": 0.0,
     "fdir_status": "NOMINAL",
-    "fdir_alert": "NO_ANOMALY_DETECTED"
+    "fdir_alert": "NO_ANOMALY_DETECTED",
+    "mitigation_triggered": False
 }
 
 ai_proactive_audit = {
@@ -140,6 +144,7 @@ async def set_coordinates(coords: MissionCoordinates):
     mission_state["flight_time"] = 0.0
     mission_state["fdir_status"] = "NOMINAL"
     mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
+    mission_state["mitigation_triggered"] = False
     return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.model_dump()}
 
 @app.post("/api/drone/command")
@@ -375,6 +380,20 @@ async def websocket_telemetry(websocket: WebSocket):
                 if abs(primary_v["roll"]) > 40.0 or abs(primary_v["pitch"]) > 60.0:
                     mission_state["fdir_status"] = "CRITICAL"
                     mission_state["fdir_alert"] = "ATTITUDE_EXCURSION_LIMIT_EXCEEDED"
+                    
+                    if not mission_state.get("mitigation_triggered", False):
+                        async def trigger_ai_mitigation():
+                            try:
+                                response_raw = await fdir_ai_handler.evaluate_and_mitigate(mission_state)
+                                ai_decision = json.loads(response_raw)
+                                if ai_decision.get("action_required"):
+                                    print(f"🤖 [AUTONOMOUS AI MITIGATION] Comando ejecutado: {ai_decision.get('command_code')} - {ai_decision.get('reason')}")
+                                    mission_state["abort_triggered"] = True
+                                    mission_state["sequencer_state"] = "ABORT_MISSION_AUTONOMOUS_AI_RECOVERY"
+                                    mission_state["mitigation_triggered"] = True
+                            except Exception as e:
+                                print(f"⚠️ Error en mitigación IA: {e}")
+                        asyncio.create_task(trigger_ai_mitigation())
                 else:
                     if not mission_state["abort_triggered"]:
                         mission_state["fdir_status"] = "NOMINAL"

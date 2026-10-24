@@ -3,6 +3,7 @@ import sqlite3
 import random
 import json
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -33,12 +34,22 @@ def init_db():
     conn.commit()
     conn.close()
 
+def log_telemetry(packet):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO flight_logs (mission_id, timestamp, altitude, speed, fsm_state)
+        VALUES (?, ?, ?, ?, ?)
+    ''', ("ODYSSEY-1-ADVANCED", packet["timestamp"], packet["altitude"], packet["speed"], packet["payload"]["status"]))
+    conn.commit()
+    conn.close()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     yield
 
-app = FastAPI(title="ODYSSEY-1 GCS Enterprise", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="ODYSSEY-1 GCS Enterprise", version="1.2.0", lifespan=lifespan)
 
 class PayloadProcessor:
     def ingest_telemetry(self):
@@ -95,15 +106,11 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
-
 manager = ConnectionManager()
 
 @app.get("/")
 def read_root():
-    return {"status": "ONLINE", "system": "ODYSSEY-1 GCS", "version": "1.1.0"}
+    return {"status": "ONLINE", "system": "ODYSSEY-1 GCS", "version": "1.2.0"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
@@ -131,11 +138,13 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             telemetry_packet = {
+                "timestamp": time.time(),
                 "altitude": round(random.uniform(0, 45000), 2),
                 "speed": round(random.uniform(0, 1200), 2),
                 "payload": payload_mgr.ingest_telemetry(),
                 "failover": failover_mgr.check_link_health()
             }
+            log_telemetry(telemetry_packet)
             await websocket.send_text(json.dumps(telemetry_packet))
             await asyncio.sleep(1)
     except WebSocketDisconnect:

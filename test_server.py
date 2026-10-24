@@ -6,7 +6,12 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["version"] == "1.1.0"
+    assert response.json()["version"] == "1.2.0"
+
+def test_dashboard_endpoint():
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "ODYSSEY-1 GCS - Mission Control Center" in response.text
 
 def test_payload_endpoint():
     response = client.get("/api/payload")
@@ -28,3 +33,12 @@ def test_failover_endpoint():
     data = response.json()
     assert "active_station" in data
     assert "latency_ms" in data
+
+def test_websocket_telemetry():
+    with client.websocket_connect("/ws/telemetry") as websocket:
+        data = websocket.receive_json()
+        assert "altitude" in data
+        assert "speed" in data
+        assert "payload" in data
+        assert "failover" in data
+        assert "timestamp" in data

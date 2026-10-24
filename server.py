@@ -50,6 +50,27 @@ def init_db():
 
 init_db()
 
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_text(message)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
 class SimpleEKF:
     def __init__(self):
         self.est_alt = 0.0
@@ -318,10 +339,8 @@ async def generate_pdf_report():
         return FileResponse(report_file, media_type="image/png", filename="flight_report.png")
     return {"status": "Report generated", "details": f"ODYSSEY-1 Telemetry Mission {mission_state['mission_id']} Summary Certified"}
 
-@app.websocket("/ws/telemetry")
-async def websocket_telemetry(websocket: WebSocket):
-    await websocket.accept()
-    
+# --- Bucle Centralizado de Simulación y Difusión (Broadcast Hub) ---
+async def central_telemetry_broadcast_loop():
     mav_connection = None
     try:
         mav_connection = mavutil.mavlink_connection('udpin:0.0.0.0:14550', source_system=1)
@@ -336,9 +355,8 @@ async def websocket_telemetry(websocket: WebSocket):
         2: {"lat": mission_state["pad_lat"] + 0.002, "lon": mission_state["pad_lon"] + 0.002, "alt": 0.0, "speed": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0}
     }
 
-    try:
-        while True:
-            telemetry_payload = None
+    while True:
+        try:
             if mav_connection:
                 try:
                     while True:
@@ -544,10 +562,24 @@ async def websocket_telemetry(websocket: WebSocket):
             except Exception:
                 pass
 
-            await websocket.send_text(json.dumps(telemetry_payload))
-            await asyncio.sleep(0.1)
+            await manager.broadcast(json.dumps(telemetry_payload))
+        except Exception:
+            pass
+
+        await asyncio.sleep(0.1)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(central_telemetry_broadcast_loop())
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        pass
+        manager.disconnect(websocket)
 
 class NoCacheStaticFiles(StaticFiles):
     def file_response(self, *args, **kwargs):

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 Mission Control Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #0b0f19; color: #00ffcc; font-family: monospace; margin: 0; padding: 20px; }
         h1 { text-align: center; border-bottom: 2px solid #00ffcc; padding-bottom: 10px; }
@@ -10,6 +11,13 @@
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .metric { font-size: 24px; font-weight: bold; color: #ffffff; margin-top: 10px; }
         .status-ok { color: #10b981; }
+        .chart-container { position: relative; height: 250px; width: 100%; margin-top: 10px; }
+        .controls { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        button { background: #1f2937; color: #00ffcc; border: 1px solid #00ffcc; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-family: monospace; font-weight: bold; }
+        button:hover { background: #00ffcc; color: #0b0f19; }
+        button.danger { border-color: #ef4444; color: #ef4444; }
+        button.danger:hover { background: #ef4444; color: #ffffff; }
+        #console { background: #030712; border: 1px solid #1f2937; padding: 10px; margin-top: 20px; border-radius: 4px; height: 80px; overflow-y: auto; font-size: 12px; color: #9ca3af; }
     </style>
 </head>
 <body>
@@ -18,29 +26,90 @@
         <div class="card">
             <h3>Altitud Actual</h3>
             <div id="alt" class="metric">-- m</div>
+            <div class="chart-container">
+                <canvas id="altChart"></canvas>
+            </div>
         </div>
         <div class="card">
             <h3>Velocidad</h3>
             <div id="spd" class="metric">-- m/s</div>
+            <div class="chart-container">
+                <canvas id="spdChart"></canvas>
+            </div>
         </div>
         <div class="card">
             <h3>Temperatura Carga Útil</h3>
             <div id="temp" class="metric">-- °C</div>
+            <div class="controls">
+                <button onclick="sendCmd('CALIBRATE_IMU', 'IMU_MODULE')">Calibrar IMU</button>
+                <button onclick="sendCmd('DEPLOY_PAYLOAD', 'PAYLOAD_SYS')">Desplegar Carga</button>
+                <button class="danger" onclick="sendCmd('ABORT', 'FLIGHT_COMPUTER')">ABORTAR MISIÓN</button>
+                <button onclick="window.location.href='/api/logs/export'">Descargar DB (SQLite)</button>
+            </div>
         </div>
         <div class="card">
             <h3>Estado del Enlace (Failover)</h3>
             <div id="station" class="metric status-ok">--</div>
+            <h3>Consola de Uplink</h3>
+            <div id="console">Esperando comandos...</div>
         </div>
     </div>
 
     <script>
+        const ctxAlt = document.getElementById('altChart').getContext('2d');
+        const altChart = new Chart(ctxAlt, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Altitud (m)', data: [], borderColor: '#00ffcc', tension: 0.1 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+        });
+
+        const ctxSpd = document.getElementById('spdChart').getContext('2d');
+        const spdChart = new Chart(ctxSpd, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Velocidad (m/s)', data: [], borderColor: '#ff00ff', tension: 0.1 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+        });
+
+        function sendCmd(command, targetModule) {
+            fetch('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: command, target_module: targetModule })
+            })
+            .then(res => res.json())
+            .then(data => {
+                const consoleDiv = document.getElementById('console');
+                consoleDiv.innerHTML = `[CMD OK] ${data.command} enviado a ${data.target} a las ${new Date(data.timestamp * 1000).toLocaleTimeString()}<br>` + consoleDiv.innerHTML;
+            })
+            .catch(err => {
+                const consoleDiv = document.getElementById('console');
+                consoleDiv.innerHTML = `[CMD ERROR] Fallo al enviar comando<br>` + consoleDiv.innerHTML;
+            });
+        }
+
         const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
+            const timeLabel = new Date().toLocaleTimeString();
+
             document.getElementById("alt").innerText = data.altitude.toFixed(2) + " m";
             document.getElementById("spd").innerText = data.speed.toFixed(2) + " m/s";
             document.getElementById("temp").innerText = data.payload.temperature_c + " °C";
             document.getElementById("station").innerText = data.failover.active_station + " (" + data.failover.latency_ms + "ms)";
+
+            if (altChart.data.labels.length > 20) {
+                altChart.data.labels.shift();
+                altChart.data.datasets[0].data.shift();
+                spdChart.data.labels.shift();
+                spdChart.data.datasets[0].data.shift();
+            }
+            altChart.data.labels.push(timeLabel);
+            altChart.data.datasets[0].data.push(data.altitude);
+            altChart.update('none');
+
+            spdChart.data.labels.push(timeLabel);
+            spdChart.data.datasets[0].data.push(data.speed);
+            spdChart.update('none');
         };
     </script>
 </body>

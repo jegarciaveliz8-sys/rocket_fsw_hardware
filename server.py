@@ -5,8 +5,9 @@ import json
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "flight_recorder.db")
@@ -49,7 +50,11 @@ async def lifespan(app: FastAPI):
     init_db()
     yield
 
-app = FastAPI(title="ODYSSEY-1 GCS Enterprise", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="ODYSSEY-1 GCS Enterprise", version="1.3.0", lifespan=lifespan)
+
+class CommandModel(BaseModel):
+    command: str
+    target_module: str
 
 class PayloadProcessor:
     def ingest_telemetry(self):
@@ -110,7 +115,7 @@ manager = ConnectionManager()
 
 @app.get("/")
 def read_root():
-    return {"status": "ONLINE", "system": "ODYSSEY-1 GCS", "version": "1.2.0"}
+    return {"status": "ONLINE", "system": "ODYSSEY-1 GCS", "version": "1.3.0"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
@@ -131,6 +136,19 @@ def get_mission_plan():
 @app.get("/api/failover")
 def get_failover_status():
     return failover_mgr.check_link_health()
+
+@app.post("/api/command")
+def send_command(cmd: CommandModel):
+    valid_commands = ["ABORT", "RESTART_FSM", "CALIBRATE_IMU", "DEPLOY_PAYLOAD"]
+    if cmd.command not in valid_commands:
+        raise HTTPException(status_code=400, detail="Comando no válido en protocolo FSW")
+    return {"status": "EXECUTED", "command": cmd.command, "target": cmd.target_module, "timestamp": time.time()}
+
+@app.get("/api/logs/export")
+def export_flight_logs():
+    if not os.path.exists(DB_FILE):
+        raise HTTPException(status_code=404, detail="Base de datos de vuelo no encontrada")
+    return FileResponse(DB_FILE, media_type="application/x-sqlite3", filename="flight_recorder.db")
 
 @app.websocket("/ws/telemetry")
 async def websocket_endpoint(websocket: WebSocket):

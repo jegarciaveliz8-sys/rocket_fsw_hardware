@@ -7,6 +7,7 @@ import zlib
 import uuid
 import serial
 import serial.tools.list_ports
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -15,8 +16,6 @@ from typing import List
 from google import genai
 from pymavlink import mavutil
 from autonomous_recovery import AutonomousFDIRHandler
-
-app = FastAPI(title="ODYSSEY-1 Ground Control Station (GCS)")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "flight_recorder.db")
@@ -125,219 +124,6 @@ try:
     control_link = mavutil.mavlink_connection('udpout:127.0.0.1:14556', source_system=255)
 except Exception:
     control_link = None
-
-class MissionCoordinates(BaseModel):
-    pad_lat: float
-    pad_lon: float
-    target_lat: float
-    target_lon: float
-
-class OrbitPlanRequest(BaseModel):
-    target_altitude_km: float
-    crc32_checksum: int
-
-class AssistantRequest(BaseModel):
-    prompt: str = "Auditar sistema"
-    query: str = None
-
-class DroneCommandRequest(BaseModel):
-    command: str
-    param1: float = 0.0
-
-class Waypoint(BaseModel):
-    lat: float
-    lon: float
-    alt: float
-    seq: int
-
-class MissionPlanRequest(BaseModel):
-    waypoints: List[Waypoint]
-
-@app.post("/api/mission/coordinates")
-async def set_coordinates(coords: MissionCoordinates):
-    mission_state["mission_id"] = str(uuid.uuid4())[:8]
-    mission_state["pad_lat"] = coords.pad_lat
-    mission_state["pad_lon"] = coords.pad_lon
-    mission_state["target_lat"] = coords.target_lat
-    mission_state["target_lon"] = coords.target_lon
-    mission_state["sequencer_state"] = "POWERED_FLIGHT_PROPULSION"
-    mission_state["abort_triggered"] = False
-    mission_state["flight_time"] = 0.0
-    mission_state["fdir_status"] = "NOMINAL"
-    mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
-    mission_state["mitigation_triggered"] = False
-    return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.model_dump()}
-
-@app.post("/api/drone/command")
-async def send_drone_command(req: DroneCommandRequest):
-    try:
-        if not control_link:
-            raise HTTPException(status_code=500, detail="Control link UDP connection not initialized")
-            
-        if req.command == "ARM":
-            cmd_id, p1 = 400, 1.0
-        elif req.command == "DISARM":
-            cmd_id, p1 = 400, 0.0
-        elif req.command == "TAKEOFF":
-            cmd_id, p1 = 22, 10.0
-        elif req.command == "RTL":
-            cmd_id, p1 = 20, 0.0
-        else:
-            cmd_id, p1 = 400, 0.0
-
-        control_link.mav.command_long_send(1, 1, cmd_id, 0, p1, 0, 0, 0, 0, 0, 0)
-        return {"status": "SUCCESS", "command_sent": req.command}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/mission/waypoints")
-async def upload_mission_waypoints(mission: MissionPlanRequest):
-    received_count = len(mission.waypoints)
-    return {
-        "status": "success",
-        "waypoints_uploaded": received_count,
-        "message": f"Misión de {received_count} puntos cargada correctamente en el pipeline."
-    }
-
-@app.post("/api/mission/abort")
-async def trigger_abort():
-    mission_state["abort_triggered"] = True
-    mission_state["sequencer_state"] = "ABORT_MISSION_LES_TRIGGERED"
-    mission_state["fdir_status"] = "CRITICAL"
-    mission_state["fdir_alert"] = "MANUAL_ABORT_FTS_ACTIVATED"
-    asyncio.create_task(run_proactive_ai_audit("ABORT_TRIGGERED_BY_OPERATOR"))
-    return {"status": "ABORT_SEQUENCE_ACTIVATED"}
-
-@app.post("/api/orbit/plan")
-async def plan_orbit(req: OrbitPlanRequest):
-    payload_str = f"{req.target_altitude_km:.1f}"
-    calculated_crc = zlib.crc32(payload_str.encode('utf-8')) & 0xFFFFFFFF
-    if req.crc32_checksum != calculated_crc:
-        raise HTTPException(status_code=400, detail=f"SECURITY_ALERT: CRC32 mismatch. Received {req.crc32_checksum}, expected {calculated_crc}")
-    mission_state["target_altitude_km"] = req.target_altitude_km
-    return {
-        "status": "UPLINK_SECURE_ACCEPTED",
-        "burn_plan": {
-            "dv_magnitude_m_s": round(math.sqrt(req.target_altitude_km * 9.81 * 1000) * 0.1, 2),
-            "target_altitude_km": req.target_altitude_km
-        }
-    }
-
-async def run_proactive_ai_audit(trigger_event: str):
-    try:
-        client = genai.Client()
-        prompt = f"""
-        [SISTEMA DE AUDITORÍA AUTÓNOMA GCS ODYSSEY-1]
-        EVENTO DETECTADO: {trigger_event}
-        Misión ID: {mission_state['mission_id']} | Tiempo de Vuelo: T+{mission_state['flight_time']:.1f}s
-        Altitud: {mission_state['altitude_km']} km | Velocidad: {mission_state['speed_kmh']} km/h
-        FDIR Status: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
-        Presión Dinámica: {mission_state['dynamic_pressure_kpa']} kPa
-        
-        Emite una evaluación de riesgo operacional ultraconcisa (máximo 2 frases) y una acción recomendada.
-        """
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
-        ai_proactive_audit["last_alert"] = response.text
-        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
-        ai_proactive_audit["timestamp"] = mission_state["flight_time"]
-    except Exception as e:
-        ai_proactive_audit["last_alert"] = f"⚠️ AUDITORÍA AUTÓNOMA: {trigger_event} - {mission_state['fdir_alert']}"
-        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
-
-async def handle_ai_logic(prompt: str):
-    max_retries = 2
-    for attempt in range(max_retries):
-        try:
-            client = genai.Client()
-            context_prompt = f"""
-            Actúa como el Ingeniero Jefe de Operaciones en Tierra (GCS) de ODYSSEY-1.
-            Estado actual de telemetría de la misión ({mission_state['mission_id']}):
-            - Altitud: {mission_state['altitude_km']} km
-            - Velocidad: {mission_state['speed_kmh']} km/h
-            - Estado FSM: {mission_state['sequencer_state']}
-            - FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
-            - Última Auditoría Proactiva IA: {ai_proactive_audit['last_alert']}
-            
-            Consulta del operador: {prompt}
-            Responde de forma técnica y concisa.
-            """
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=context_prompt,
-            )
-            return {"response": response.text, "proactive_audit": ai_proactive_audit}
-        except Exception:
-            if attempt == max_retries - 1:
-                return {"response": f"⚠️ ENLACE IA DEGRADADO: Subsistemas locales nominales.", "proactive_audit": ai_proactive_audit}
-            await asyncio.sleep(1)
-
-async def parse_prompt_from_request(req: AssistantRequest, request: Request):
-    prompt_text = "Auditar sistema"
-    if req:
-        if req.prompt:
-            prompt_text = req.prompt
-        elif req.query:
-            prompt_text = req.query
-    if request:
-        try:
-            body = await request.json()
-            if "prompt" in body:
-                prompt_text = body["prompt"]
-            elif "query" in body:
-                prompt_text = body["query"]
-        except Exception:
-            pass
-    return prompt_text
-
-@app.get("/ai/query")
-@app.post("/ai/query")
-@app.get("/api/ai/query")
-@app.post("/api/ai/query")
-@app.get("/api/asistente")
-@app.post("/api/asistente")
-@app.get("/api/assistant")
-@app.post("/api/assistant")
-async def ai_query_endpoint(req: AssistantRequest = None, request: Request = None):
-    return await handle_ai_logic(await parse_prompt_from_request(req, request))
-
-@app.get("/api/mission/logs")
-async def get_flight_logs():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs WHERE mission_id = ? ORDER BY id ASC LIMIT 500", (mission_state["mission_id"],))
-    rows = cursor.fetchall()
-    conn.close()
-    return {"mission_id": mission_state["mission_id"], "logs": rows}
-
-def generate_csv_response():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, fsm_state FROM flight_logs WHERE mission_id = ?", (mission_state["mission_id"],))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    csv_data = "Mission Time,lat,lon,altitude,speed,fsm_state\n"
-    for r in rows:
-        csv_data += f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{r[5]}\n"
-    return PlainTextResponse(csv_data, media_type="text/csv")
-
-@app.get("/export/csv", operation_id="export_csv_root")
-@app.get("/api/export/csv", operation_id="export_csv_api")
-@app.get("/api/mission/export", operation_id="export_mission_export")
-@app.get("/api/mission/export-csv", operation_id="export_mission_export_csv")
-@app.get("/api/mission/export/csv", operation_id="export_mission_export_csv_slash")
-async def export_csv_endpoint():
-    return generate_csv_response()
-
-@app.get("/api/mission/report/pdf")
-async def generate_pdf_report():
-    report_file = os.path.join(BASE_DIR, "flight_report.png")
-    if os.path.exists(report_file):
-        return FileResponse(report_file, media_type="image/png", filename="flight_report.png")
-    return {"status": "Report generated", "details": f"ODYSSEY-1 Telemetry Mission {mission_state['mission_id']} Summary Certified"}
 
 # --- Bucle Centralizado de Simulación y Difusión (Broadcast Hub) ---
 async def central_telemetry_broadcast_loop():
@@ -568,9 +354,226 @@ async def central_telemetry_broadcast_loop():
 
         await asyncio.sleep(0.1)
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(central_telemetry_broadcast_loop())
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(central_telemetry_broadcast_loop())
+    yield
+    task.cancel()
+
+app = FastAPI(title="ODYSSEY-1 Ground Control Station (GCS)", lifespan=lifespan)
+
+class MissionCoordinates(BaseModel):
+    pad_lat: float
+    pad_lon: float
+    target_lat: float
+    target_lon: float
+
+class OrbitPlanRequest(BaseModel):
+    target_altitude_km: float
+    crc32_checksum: int
+
+class AssistantRequest(BaseModel):
+    prompt: str = "Auditar sistema"
+    query: str = None
+
+class DroneCommandRequest(BaseModel):
+    command: str
+    param1: float = 0.0
+
+class Waypoint(BaseModel):
+    lat: float
+    lon: float
+    alt: float
+    seq: int
+
+class MissionPlanRequest(BaseModel):
+    waypoints: List[Waypoint]
+
+@app.post("/api/mission/coordinates")
+async def set_coordinates(coords: MissionCoordinates):
+    mission_state["mission_id"] = str(uuid.uuid4())[:8]
+    mission_state["pad_lat"] = coords.pad_lat
+    mission_state["pad_lon"] = coords.pad_lon
+    mission_state["target_lat"] = coords.target_lat
+    mission_state["target_lon"] = coords.target_lon
+    mission_state["sequencer_state"] = "POWERED_FLIGHT_PROPULSION"
+    mission_state["abort_triggered"] = False
+    mission_state["flight_time"] = 0.0
+    mission_state["fdir_status"] = "NOMINAL"
+    mission_state["fdir_alert"] = "NO_ANOMALY_DETECTED"
+    mission_state["mitigation_triggered"] = False
+    return {"status": "success", "mission_id": mission_state["mission_id"], "updated_coordinates": coords.model_dump()}
+
+@app.post("/api/drone/command")
+async def send_drone_command(req: DroneCommandRequest):
+    try:
+        if not control_link:
+            raise HTTPException(status_code=500, detail="Control link UDP connection not initialized")
+            
+        if req.command == "ARM":
+            cmd_id, p1 = 400, 1.0
+        elif req.command == "DISARM":
+            cmd_id, p1 = 400, 0.0
+        elif req.command == "TAKEOFF":
+            cmd_id, p1 = 22, 10.0
+        elif req.command == "RTL":
+            cmd_id, p1 = 20, 0.0
+        else:
+            cmd_id, p1 = 400, 0.0
+
+        control_link.mav.command_long_send(1, 1, cmd_id, 0, p1, 0, 0, 0, 0, 0, 0)
+        return {"status": "SUCCESS", "command_sent": req.command}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/mission/waypoints")
+async def upload_mission_waypoints(mission: MissionPlanRequest):
+    received_count = len(mission.waypoints)
+    return {
+        "status": "success",
+        "waypoints_uploaded": received_count,
+        "message": f"Misión de {received_count} puntos cargada correctamente en el pipeline."
+    }
+
+@app.post("/api/mission/abort")
+async def trigger_abort():
+    mission_state["abort_triggered"] = True
+    mission_state["sequencer_state"] = "ABORT_MISSION_LES_TRIGGERED"
+    mission_state["fdir_status"] = "CRITICAL"
+    mission_state["fdir_alert"] = "MANUAL_ABORT_FTS_ACTIVATED"
+    asyncio.create_task(run_proactive_ai_audit("ABORT_TRIGGERED_BY_OPERATOR"))
+    return {"status": "ABORT_SEQUENCE_ACTIVATED"}
+
+@app.post("/api/orbit/plan")
+async def plan_orbit(req: OrbitPlanRequest):
+    payload_str = f"{req.target_altitude_km:.1f}"
+    calculated_crc = zlib.crc32(payload_str.encode('utf-8')) & 0xFFFFFFFF
+    if req.crc32_checksum != calculated_crc:
+        raise HTTPException(status_code=400, detail=f"SECURITY_ALERT: CRC32 mismatch. Received {req.crc32_checksum}, expected {calculated_crc}")
+    mission_state["target_altitude_km"] = req.target_altitude_km
+    return {
+        "status": "UPLINK_SECURE_ACCEPTED",
+        "burn_plan": {
+            "dv_magnitude_m_s": round(math.sqrt(req.target_altitude_km * 9.81 * 1000) * 0.1, 2),
+            "target_altitude_km": req.target_altitude_km
+        }
+    }
+
+async def run_proactive_ai_audit(trigger_event: str):
+    try:
+        client = genai.Client()
+        prompt = f"""
+        [SISTEMA DE AUDITORÍA AUTÓNOMA GCS ODYSSEY-1]
+        EVENTO DETECTADO: {trigger_event}
+        Misión ID: {mission_state['mission_id']} | Tiempo de Vuelo: T+{mission_state['flight_time']:.1f}s
+        Altitud: {mission_state['altitude_km']} km | Velocidad: {mission_state['speed_kmh']} km/h
+        FDIR Status: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+        Presión Dinámica: {mission_state['dynamic_pressure_kpa']} kPa
+        
+        Emite una evaluación de riesgo operacional ultraconcisa (máximo 2 frases) y una acción recomendada.
+        """
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        ai_proactive_audit["last_alert"] = response.text
+        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
+        ai_proactive_audit["timestamp"] = mission_state["flight_time"]
+    except Exception as e:
+        ai_proactive_audit["last_alert"] = f"⚠️ AUDITORÍA AUTÓNOMA: {trigger_event} - {mission_state['fdir_alert']}"
+        ai_proactive_audit["alert_level"] = mission_state["fdir_status"]
+
+async def handle_ai_logic(prompt: str):
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            client = genai.Client()
+            context_prompt = f"""
+            Actúa como el Ingeniero Jefe de Operaciones en Tierra (GCS) de ODYSSEY-1.
+            Estado actual de telemetría de la misión ({mission_state['mission_id']}):
+            - Altitud: {mission_state['altitude_km']} km
+            - Velocidad: {mission_state['speed_kmh']} km/h
+            - Estado FSM: {mission_state['sequencer_state']}
+            - FDIR: {mission_state['fdir_status']} ({mission_state['fdir_alert']})
+            - Última Auditoría Proactiva IA: {ai_proactive_audit['last_alert']}
+            
+            Consulta del operador: {prompt}
+            Responde de forma técnica y concisa.
+            """
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=context_prompt,
+            )
+            return {"response": response.text, "proactive_audit": ai_proactive_audit}
+        except Exception:
+            if attempt == max_retries - 1:
+                return {"response": f"⚠️ ENLACE IA DEGRADADO: Subsistemas locales nominales.", "proactive_audit": ai_proactive_audit}
+            await asyncio.sleep(1)
+
+async def parse_prompt_from_request(req: AssistantRequest, request: Request):
+    prompt_text = "Auditar sistema"
+    if req:
+        if req.prompt:
+            prompt_text = req.prompt
+        elif req.query:
+            prompt_text = req.query
+    if request:
+        try:
+            body = await request.json()
+            if "prompt" in body:
+                prompt_text = body["prompt"]
+            elif "query" in body:
+                prompt_text = body["query"]
+        except Exception:
+            pass
+    return prompt_text
+
+@app.get("/ai/query")
+@app.post("/ai/query")
+@app.get("/api/ai/query")
+@app.post("/api/ai/query")
+@app.get("/api/asistente")
+@app.post("/api/asistente")
+@app.get("/api/assistant")
+@app.post("/api/assistant")
+async def ai_query_endpoint(req: AssistantRequest = None, request: Request = None):
+    return await handle_ai_logic(await parse_prompt_from_request(req, request))
+
+@app.get("/api/mission/logs")
+async def get_flight_logs():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, roll, pitch, yaw, tvc_x, tvc_y, fsm_state FROM flight_logs WHERE mission_id = ? ORDER BY id ASC LIMIT 500", (mission_state["mission_id"],))
+    rows = cursor.fetchall()
+    conn.close()
+    return {"mission_id": mission_state["mission_id"], "logs": rows}
+
+def generate_csv_response():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT timestamp, lat, lon, altitude, speed, fsm_state FROM flight_logs WHERE mission_id = ?", (mission_state["mission_id"],))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    csv_data = "Mission Time,lat,lon,altitude,speed,fsm_state\n"
+    for r in rows:
+        csv_data += f"{r[0]},{r[1]},{r[2]},{r[3]},{r[4]},{r[5]}\n"
+    return PlainTextResponse(csv_data, media_type="text/csv")
+
+@app.get("/export/csv", operation_id="export_csv_root")
+@app.get("/api/export/csv", operation_id="export_csv_api")
+@app.get("/api/mission/export", operation_id="export_mission_export")
+@app.get("/api/mission/export-csv", operation_id="export_mission_export_csv")
+@app.get("/api/mission/export/csv", operation_id="export_mission_export_csv_slash")
+async def export_csv_endpoint():
+    return generate_csv_response()
+
+@app.get("/api/mission/report/pdf")
+async def generate_pdf_report():
+    report_file = os.path.join(BASE_DIR, "flight_report.png")
+    if os.path.exists(report_file):
+        return FileResponse(report_file, media_type="image/png", filename="flight_report.png")
+    return {"status": "Report generated", "details": f"ODYSSEY-1 Telemetry Mission {mission_state['mission_id']} Summary Certified"}
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):

@@ -1,0 +1,23 @@
+{
+    "mission_name": "ODYSSEY-1-ADVANCED",
+    "waypoints": [
+        {
+            "id": 1,
+            "lat": 14.7883,
+            "lon": -90.1988,
+            "alt_target": 1000
+        },
+        {
+            "id": 2,
+            "lat": 14.8,
+            "lon": -90.21,
+            "alt_target": 15000
+        },
+        {
+            "id": 3,
+            "lat": 14.85,
+            "lon": -90.25,
+            "alt_target": 45000
+        }
+    ]
+}

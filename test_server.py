@@ -1,20 +1,30 @@
-import pytest
 from fastapi.testclient import TestClient
 from server import app
 
 client = TestClient(app)
 
-def test_root_or_docs():
-    # Verifica que FastAPI responda correctamente en la documentación o rutas básicas
-    response = client.get("/openapi.json")
+def test_read_root():
+    response = client.get("/")
     assert response.status_code == 200
+    assert response.json()["version"] == "1.1.0"
 
-def test_websocket_lifecycle():
-    with client.websocket_connect("/ws/telemetry") as websocket:
-        # Enviar comando de lanzamiento
-        websocket.send_json({"command": "LAUNCH"})
-        # Recibir respuesta de telemetría del servidor
-        data = websocket.receive_json()
-        assert "altitude" in data
-        assert "velocity" in data
-        assert data["status"] == "POWERED ASCENT"
+def test_payload_endpoint():
+    response = client.get("/api/payload")
+    assert response.status_code == 200
+    data = response.json()
+    assert "temperature_c" in data
+    assert data["status"] == "PAYLOAD_NOMINAL"
+
+def test_mission_endpoint():
+    response = client.get("/api/mission")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["mission_name"] == "ODYSSEY-1-ADVANCED"
+    assert len(data["waypoints"]) > 0
+
+def test_failover_endpoint():
+    response = client.get("/api/failover")
+    assert response.status_code == 200
+    data = response.json()
+    assert "active_station" in data
+    assert "latency_ms" in data

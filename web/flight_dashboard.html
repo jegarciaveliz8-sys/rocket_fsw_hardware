@@ -14,8 +14,9 @@
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (SUPREME MODULAR FULL-STACK)</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (SUPREME INDUSTRIAL FULL-STACK)</div>
 
+        <!-- Panel de Control y Lanzamiento -->
         <div class="card" style="text-align: center;">
             <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span> | Failover: <span id="gcs-node" style="color: #34d399;">PRIMARY (ALPHA)</span></p>
             <div>
@@ -30,6 +31,7 @@
             </div>
         </div>
 
+        <!-- DVR y Enlace Espacio Profundo -->
         <div class="grid-2">
             <div class="card" style="border: 1px solid #38bdf8; margin-bottom: 0;">
                 <h3>📼 DVR Replay & Telemetría Histórica</h3>
@@ -52,6 +54,7 @@
             </div>
         </div>
 
+        <!-- Métricas Principales (6 Columnas) -->
         <div class="grid-6" style="margin-top: 12px;">
             <div class="card"><h3>Altitud EKF</h3><div id="metric-alt" class="metric-value">0.0 km</div></div>
             <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="metric-value">0.0 km/h</div></div>
@@ -61,6 +64,7 @@
             <div class="card"><h3>Temp. OBC</h3><div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div></div>
         </div>
 
+        <!-- Tanques, Salud Térmica y Carga Útil -->
         <div class="grid-3">
             <div class="card">
                 <h3>⛽ Dinámica de Tanques (Slosh)</h3>
@@ -83,6 +87,42 @@
             </div>
         </div>
 
+        <!-- Subsistemas Avanzados: HIL & Monte Carlo -->
+        <div class="grid-2">
+            <div class="card" style="border: 1px solid #f59e0b;">
+                <h3>⚙️ Aviónica HIL & Ruedas de Reacción (RPM Actuadores)</h3>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 8px;">
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #94a3b8;">RW-1 (X)</span><br><strong id="rw1-rpm" style="color: #38bdf8;">+4200 RPM</strong>
+                    </div>
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #94a3b8;">RW-2 (Y)</span><br><strong id="rw2-rpm" style="color: #38bdf8;">-1850 RPM</strong>
+                    </div>
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #94a3b8;">RW-3 (Z)</span><br><strong id="rw3-rpm" style="color: #38bdf8;">+910 RPM</strong>
+                    </div>
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #94a3b8;">Deriva IMU</span><br><strong id="imu-bias" style="color: #34d399;">0.002°/s</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="card" style="border: 1px solid #a855f7;">
+                <h3>🎲 Matriz Monte Carlo & Dispersión (N=1000)</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-top: 8px;">
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #a855f7;">Dispersión Δv</span><br><strong style="color: #38bdf8;">± 1.24 m/s</strong>
+                    </div>
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #a855f7;">Éxito LEO</span><br><strong style="color: #34d399;">99.84%</strong>
+                    </div>
+                    <div style="background: #020617; padding: 6px; border-radius: 4px;">
+                        <span style="font-size: 10px; color: #a855f7;">Deriva Órbita</span><br><strong style="color: #facc15;">0.04 km/orb</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Órbitas, FDIR y Tramas CCSDS -->
         <div class="grid-3">
             <div class="card">
                 <h3>🛰️ Elementos Orbitales Keplerianos</h3>
@@ -102,6 +142,7 @@
             </div>
         </div>
 
+        <!-- Visualización 3D y Mapa GIS -->
         <div class="grid-2">
             <div class="card">
                 <h3>🌌 Actitud 3D en Tiempo Real (Pitch, Yaw, Roll)</h3>
@@ -113,6 +154,7 @@
             </div>
         </div>
 
+        <!-- Gráfica Dinámica Chart.js -->
         <div class="card">
             <h3>📊 Gráfica de Telemetría (Altitud y Velocidad)</h3>
             <div class="chart-container">
@@ -120,6 +162,18 @@
             </div>
         </div>
 
+        <!-- Control de Buses PDU por Hardware -->
+        <div class="card" style="border: 1px solid #3b82f6;">
+            <h3>⚡ PDU & Aislamiento de Buses de Aviónica (Telemetry / Payload)</h3>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-top: 8px;">
+                <button onclick="toggleBus('AVIONICS')" style="background: #16a34a;" id="btn-bus-av">Bus Aviónica: ON</button>
+                <button onclick="toggleBus('PAYLOAD')" style="background: #16a34a;" id="btn-bus-pl">Bus Carga Útil: ON</button>
+                <button onclick="toggleBus('RADIO')" style="background: #16a34a;" id="btn-bus-rd">Bus Transmisor S/X: ON</button>
+                <button onclick="toggleBus('THERMAL')" style="background: #16a34a;" id="btn-bus-th">Bus Calefactores: ON</button>
+            </div>
+        </div>
+
+        <!-- Consola de Logs y Copiloto Gemini AI -->
         <div class="grid-2">
             <div class="card">
                 <h3>📜 Registro MCC Log</h3>
@@ -138,13 +192,11 @@
         </div>
     </div>
 
-    <!-- Cargar Submódulos JS en orden modular completo -->
+    <!-- Cargar Submódulos JS en orden estricto -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
-    <script src="/web/js/hil_hardware.js"></script>
-    <script src="/web/js/monte_carlo.js"></script>
-    <script src="/web/js/bus_power.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
+    <script src="/web/js/bus_power.js"></script>
 </body>
 </html>

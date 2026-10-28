@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | Deep-Space Autonomous Embedded FSW</title>
+    <title>ODYSSEY-1 | Deep-Space Autonomous & HET Propulsion FSW</title>
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -11,14 +11,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 ODYSSEY-1 | DEEP-SPACE AUTONOMOUS FSW & MISSION CONTROL</h1>
-        <div class="subtitle">NÚCLEO DE AUTONOMÍA TOTAL - FDIR AISLAMIENTO DE FALLAS, NAVEGACIÓN OPNAV Y BITÁCORA CRIPTOGRÁFICA INMUTABLE</div>
+        <h1>🚀 ODYSSEY-1 | DEEP-SPACE INTERPLANETARY CONTROL CENTER</h1>
+        <div class="subtitle">PROPULSIÓN IÓNICA HET, RETARDO RTLT ESPACIO PROFUNDO, FDIR AUTÓNOMO Y CAJA NEGRA SHA-256</div>
 
         <!-- Panel de Control RTOS -->
         <div class="card" style="text-align: center;">
             <p>Estado RTOS: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
             <div>
-                <button onclick="sendCommand('LAUNCH')">🚀 INICIAR SECUENCIA AUTÓNOMA (FDIR + EKF)</button>
+                <button onclick="sendCommand('LAUNCH')">🚀 IGNICIÓN HET & PROPAGACIÓN ORBITAL</button>
                 <button class="danger" onclick="triggerFTS()">🛑 ABORT / RSO FTS ARMADO</button>
             </div>
         </div>
@@ -56,17 +56,18 @@
         <!-- Consola de Logs del RTOS -->
         <div class="card">
             <h3>📜 Consola de Registros FSW (Kernel Log)</h3>
-            <div id="mcc-console" class="console-log">[T+0s] Núcleo autónomo inicializado. Monitoreo FDIR y Caja Negra activados.</div>
+            <div id="mcc-console" class="console-log">[T+0s] Núcleo interplanetario inicializado. Subsistemas HET y RTLT operacionales.</div>
         </div>
     </div>
 
-    <!-- Carga de Subsistemas y Módulos de Grado Mundial -->
+    <!-- Carga de Subsistemas y Módulos Avanzados -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
     <script src="/web/js/subsystems/raw_fsw_inspector.js"></script>
     <script src="/web/js/subsystems/world_class_core.js"></script>
     <script src="/web/js/subsystems/deep_space_autonomy.js"></script>
+    <script src="/web/js/subsystems/deep_space_propulsion.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

@@ -47,6 +47,7 @@ def read_root():
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
+    # Apunta directamente a la carpeta web/flight_dashboard.html que confirmamos que existe
     html_path = os.path.join(BASE_DIR, "web", "flight_dashboard.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
@@ -54,7 +55,7 @@ def get_dashboard():
             if "ODYSSEY-1 GCS - Mission Control Center" not in content:
                 content = content.replace("<title>", "<title>ODYSSEY-1 GCS - Mission Control Center - ")
             return content
-    return "<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>ODYSSEY-1 GCS - Mission Control Center</h1></body></html>"
+    return "<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>Dashboard HTML no encontrado en web/flight_dashboard.html</h1></body></html>"
 
 @app.get("/export/csv")
 def export_csv_root():

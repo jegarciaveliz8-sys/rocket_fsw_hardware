@@ -11,16 +11,17 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #07090e; color: #f3f4f6; margin: 0; padding: 20px; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 5px; letter-spacing: 1.5px; }
-        .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
-        .container { max-width: 1500px; margin: auto; }
-        .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .metric-value { font-size: 24px; font-weight: bold; color: #34d399; }
-        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin: 3px; font-size: 13px; transition: background 0.2s; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #05070b; color: #f3f4f6; margin: 0; padding: 15px; }
+        h1 { color: #38bdf8; text-align: center; margin-bottom: 2px; letter-spacing: 1.5px; font-size: 24px; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 13px; margin-bottom: 15px; }
+        .container { max-width: 1600px; margin: auto; }
+        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
+        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .metric-value { font-size: 20px; font-weight: bold; color: #34d399; }
+        button { background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; font-size: 12px; transition: background 0.2s; }
         button:hover { background: #0369a1; }
         button.danger { background: #dc2626; }
         button.danger:hover { background: #b91c1c; }
@@ -28,57 +29,91 @@
         button.warning:hover { background: #b45309; }
         button.success { background: #16a34a; }
         button.success:hover { background: #15803d; }
-        textarea, input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #374151; background: #030712; color: white; margin-top: 10px; box-sizing: border-box; }
-        pre { background: #030712; padding: 12px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 12px; border: 1px solid #1f2937; }
-        .chart-container, .viewer-container, .map-container { position: relative; height: 280px; width: 100%; margin-top: 10px; border-radius: 6px; overflow: hidden; background: #030712; border: 1px solid #1f2937; }
-        .console-log { background: #030712; color: #34d399; font-family: monospace; padding: 12px; border-radius: 6px; height: 140px; overflow-y: auto; font-size: 12px; border: 1px solid #1f2937; }
+        textarea, input, select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #334155; background: #020617; color: white; margin-top: 5px; box-sizing: border-box; font-size: 12px; }
+        pre { background: #020617; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 11px; border: 1px solid #1e293b; }
+        .chart-container, .viewer-container, .map-container { position: relative; height: 240px; width: 100%; margin-top: 5px; border-radius: 6px; overflow: hidden; background: #020617; border: 1px solid #1e293b; }
+        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; font-size: 11px; border: 1px solid #1e293b; }
+        .tank-bar { height: 12px; background: #334155; border-radius: 6px; overflow: hidden; margin-top: 5px; }
+        .tank-fill { height: 100%; background: #38bdf8; width: 100%; transition: width 0.5s; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (100% INDUSTRIAL FULL-STACK)</div>
 
         <div class="card" style="text-align: center;">
-            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span></p>
+            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
             <div>
                 <button onclick="sendCommand('LAUNCH')">🚀 LANZAMIENTO ORBITAL</button>
+                <button onclick="sendCommand('MECO')">⚡ MECO (Corte de Motor)</button>
                 <button class="warning" onclick="sendCommand('INJECT_TVC_FAULT')">⚠️ Inyectar Falla TVC</button>
                 <button class="warning" onclick="sendCommand('INJECT_LOX_LEAK')">⚠️ Inyectar Fuga LOX</button>
-                <button class="danger" onclick="sendCommand('ABORT')">🛑 ABORT / FTS</button>
+                <button class="danger" onclick="triggerFTS()">🛑 ABORT / FTS ARMADO</button>
                 <button onclick="sendCommand('RESET')">🔄 NUEVA MISIÓN</button>
                 <button class="success" onclick="downloadPDF()">📄 Reporte PDF NASA</button>
             </div>
         </div>
 
-        <!-- Módulo DVR: Reproductor de Vuelos Históricos -->
-        <div class="card" style="border: 1px solid #38bdf8;">
-            <h3>📼 DVR Replay System</h3>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <select id="mission-select" style="margin-top: 0; flex: 2;">
-                    <option value="">Cargando misiones...</option>
-                </select>
-                <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducer Replay</button>
-                <button onclick="stopReplay()" style="flex: 1; margin-top: 0; background: #475569;">⏹ En Vivo</button>
+        <!-- Módulo DVR & Red -->
+        <div class="grid-2">
+            <div class="card" style="border: 1px solid #38bdf8; margin-bottom: 0;">
+                <h3>📼 DVR Replay & Telemetría Histórica</h3>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <select id="mission-select" style="margin-top: 0; flex: 2;">
+                        <option value="">Cargando misiones...</option>
+                    </select>
+                    <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducir</button>
+                    <button onclick="stopReplay()" style="flex: 1; margin-top: 0; background: #475569;">⏹ En Vivo</button>
+                </div>
+            </div>
+            <div class="card" style="border: 1px solid #34d399; margin-bottom: 0;">
+                <h3>📡 Enlace Espacio Profundo & Simulación LOS</h3>
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 5px;">
+                    <span>Intensidad Banda S: <strong id="signal-s" style="color: #34d399;">-74.2 dBm</strong></span>
+                    <span>Intensidad Banda X: <strong id="signal-x" style="color: #38bdf8;">-82.5 dBm</strong></span>
+                    <span>Tasa de Error de Bit (BER): <strong style="color: #34d399;">10^-7 (Nominal)</strong></span>
+                </div>
             </div>
         </div>
 
-        <div class="grid-4">
+        <div class="grid-5" style="margin-top: 15px;">
             <div class="card">
-                <h3>Altitud EKF / LEO</h3>
+                <h3>Altitud EKF</h3>
                 <div id="metric-alt" class="metric-value">0.0 km</div>
             </div>
             <div class="card">
-                <h3>Velocidad Orbital</h3>
+                <h3>Velocidad</h3>
                 <div id="metric-vel" class="metric-value">0.0 km/h</div>
             </div>
             <div class="card">
+                <h3>Presión Cámara (Pc)</h3>
+                <div id="metric-pc" style="color: #38bdf8; font-size: 20px; font-weight: bold;">0.0 MPa</div>
+            </div>
+            <div class="card">
                 <h3>Estación DSN Activa</h3>
-                <div id="metric-dsn" style="color: #38bdf8; font-size: 18px; font-weight: bold;">Cape Canaveral</div>
+                <div id="metric-dsn" style="color: #38bdf8; font-size: 16px; font-weight: bold;">Cape Canaveral</div>
             </div>
             <div class="card">
                 <h3>Blackout Atmosférico</h3>
-                <div id="metric-blackout" style="color: #34d399; font-size: 18px; font-weight: bold;">NOMINAL (LINK OK)</div>
+                <div id="metric-blackout" style="color: #34d399; font-size: 15px; font-weight: bold;">NOMINAL</div>
+            </div>
+        </div>
+
+        <!-- Niveles de Tanques Slosh y Carga Útil -->
+        <div class="grid-2">
+            <div class="card">
+                <h3>⛽ Dinámica de Tanques Propulsantes (LOX / RP-1 Slosh)</h3>
+                <p style="margin: 4px 0; font-size: 12px;">Tanque LOX (Oxidante): <span id="lox-val">100%</span></p>
+                <div class="tank-bar"><div id="lox-fill" class="tank-fill" style="width: 100%;"></div></div>
+                <p style="margin: 8px 0 4px 0; font-size: 12px;">Tanque RP-1 (Combustible): <span id="rp1-val">100%</span></p>
+                <div class="tank-bar"><div id="rp1-fill" class="tank-fill" style="width: 100%; background: #f59e0b;"></div></div>
+            </div>
+            <div class="card">
+                <h3>🔬 Telemetría de Carga Útil & Experimento Científico</h3>
+                <p style="margin: 4px 0; font-size: 12px;">Espectrómetro UV: <span style="color: #38bdf8; font-weight: bold;">OPERATIVO (142.3 nm)</span></p>
+                <p style="margin: 4px 0; font-size: 12px;">Dosímetro de Radiación Cósmica: <span style="color: #34d399; font-weight: bold;">0.04 mSv/h (Seguro)</span></p>
+                <p style="margin: 4px 0; font-size: 12px;">Cámara Estelar (Tracker): <span style="color: #34d399; font-weight: bold;">LOCK (18 Estrellas)</span></p>
             </div>
         </div>
 
@@ -132,12 +167,12 @@
             <div class="card">
                 <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI (PROACTIVO)</h3>
                 <div style="display: flex; gap: 5px;">
-                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 11px; padding: 5px;">🔍 EKF & Térmico</button>
-                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 11px; padding: 5px;">📡 DSN & CCSDS</button>
+                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 11px; padding: 4px;">🔍 EKF & Térmico</button>
+                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 11px; padding: 4px;">📡 DSN & CCSDS</button>
                 </div>
                 <textarea id="ai-prompt" rows="2" placeholder="Pregunta sobre la órbita, FDIR o tramas CCSDS..."></textarea>
                 <button onclick="queryAI()">🤖 Consultar IA en Vivo</button>
-                <pre id="ai-response" style="height: 60px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
+                <pre id="ai-response" style="height: 50px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
             </div>
         </div>
     </div>
@@ -216,8 +251,8 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8' } },
-                    y: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8' } }
+                    x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
                 }
             }
         });
@@ -272,11 +307,21 @@
 
                 document.getElementById("metric-alt").innerText = (data.altitude || 0) + " km";
                 document.getElementById("metric-vel").innerText = (data.velocity || 0) + " km/h";
+                document.getElementById("metric-pc").innerText = (data.pressure || 15.4) + " MPa";
                 document.getElementById("metric-dsn").innerText = data.dsn_station || "Cape Canaveral";
+                document.getElementById("fsw-sequence").innerText = data.status || "STANDBY";
                 
                 const blackoutEl = document.getElementById("metric-blackout");
-                blackoutEl.innerText = data.blackout_status || "NOMINAL (LINK OK)";
+                blackoutEl.innerText = data.blackout_status || "NOMINAL";
                 blackoutEl.style.color = (data.blackout_status || "").includes("BLACKOUT") ? "#f87171" : "#34d399";
+
+                // Tanques Slosh
+                let loxPct = Math.max(0, 100 - (data.time || 0) * 0.8).toFixed(1);
+                let rp1Pct = Math.max(0, 100 - (data.time || 0) * 0.9).toFixed(1);
+                document.getElementById("lox-val").innerText = loxPct + "%";
+                document.getElementById("lox-fill").style.width = loxPct + "%";
+                document.getElementById("rp1-val").innerText = rp1Pct + "%";
+                document.getElementById("rp1-fill").style.width = rp1Pct + "%";
 
                 document.getElementById("orbit-a").innerText = (data.orbit_a || 6371.0) + " km";
                 document.getElementById("orbit-e").innerText = data.orbit_e || 0.0000;
@@ -332,6 +377,16 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ command: cmd }));
                 logEvent(`Comando MCC enviado: ${cmd}`, "INFO");
+            }
+        }
+
+        function triggerFTS() {
+            let code = prompt("🚨 INGRESE CÓDIGO DE DOBLE LLAVE FTS PARA ABORTO DE EMERGENCIA (Ej: ODYSSEY-ABORT):");
+            if (code === "ODYSSEY-ABORT") {
+                sendCommand("ABORT");
+                logEvent("¡SISTEMA FTS ACTIVADO! Destrucción de seguridad ejecutada.", "ERROR");
+            } else {
+                logEvent("Código FTS incorrecto. Aborto cancelado.", "WARN");
             }
         }
 

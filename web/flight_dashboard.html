@@ -11,16 +11,16 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0b0f19; color: #f3f4f6; margin: 0; padding: 20px; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 5px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #07090e; color: #f3f4f6; margin: 0; padding: 20px; }
+        h1 { color: #38bdf8; text-align: center; margin-bottom: 5px; letter-spacing: 1.5px; }
         .subtitle { text-align: center; color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
         .container { max-width: 1500px; margin: auto; }
-        .card { background: #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .metric-value { font-size: 22px; font-weight: bold; color: #34d399; }
-        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin: 3px; font-size: 13px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #34d399; }
+        button { background: #0284c7; color: white; border: none; padding: 10px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin: 3px; font-size: 13px; transition: background 0.2s; }
         button:hover { background: #0369a1; }
         button.danger { background: #dc2626; }
         button.danger:hover { background: #b91c1c; }
@@ -28,17 +28,16 @@
         button.warning:hover { background: #b45309; }
         button.success { background: #16a34a; }
         button.success:hover { background: #15803d; }
-        textarea, input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #475569; background: #0f172a; color: white; margin-top: 10px; box-sizing: border-box; }
-        pre { background: #0f172a; padding: 12px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 12px; }
-        .chart-container, .viewer-container, .map-container { position: relative; height: 260px; width: 100%; margin-top: 10px; border-radius: 6px; overflow: hidden; background: #020617; }
-        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 12px; border-radius: 6px; height: 130px; overflow-y: auto; font-size: 12px; border: 1px solid #334155; }
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        textarea, input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #374151; background: #030712; color: white; margin-top: 10px; box-sizing: border-box; }
+        pre { background: #030712; padding: 12px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 12px; border: 1px solid #1f2937; }
+        .chart-container, .viewer-container, .map-container { position: relative; height: 280px; width: 100%; margin-top: 10px; border-radius: 6px; overflow: hidden; background: #030712; border: 1px solid #1f2937; }
+        .console-log { background: #030712; color: #34d399; font-family: monospace; padding: 12px; border-radius: 6px; height: 140px; overflow-y: auto; font-size: 12px; border: 1px solid #1f2937; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0</div>
 
         <div class="card" style="text-align: center;">
             <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span></p>
@@ -59,7 +58,7 @@
                 <select id="mission-select" style="margin-top: 0; flex: 2;">
                     <option value="">Cargando misiones...</option>
                 </select>
-                <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducir Replay</button>
+                <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducer Replay</button>
                 <button onclick="stopReplay()" style="flex: 1; margin-top: 0; background: #475569;">⏹ En Vivo</button>
             </div>
         </div>
@@ -131,10 +130,14 @@
                 <div id="mcc-console" class="console-log">[T+0s] Sistema de Control de Misión NASA inicializado...</div>
             </div>
             <div class="card">
-                <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI</h3>
+                <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI (PROACTIVO)</h3>
+                <div style="display: flex; gap: 5px;">
+                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 11px; padding: 5px;">🔍 EKF & Térmico</button>
+                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 11px; padding: 5px;">📡 DSN & CCSDS</button>
+                </div>
                 <textarea id="ai-prompt" rows="2" placeholder="Pregunta sobre la órbita, FDIR o tramas CCSDS..."></textarea>
-                <button onclick="queryAI()">🤖 Consultar IA</button>
-                <pre id="ai-response" style="height: 50px; overflow-y: auto;">Esperando consulta de ingeniería...</pre>
+                <button onclick="queryAI()">🤖 Consultar IA en Vivo</button>
+                <pre id="ai-response" style="height: 60px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
             </div>
         </div>
     </div>
@@ -213,8 +216,8 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+                    x: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#1f2937' }, ticks: { color: '#94a3b8' } }
                 }
             }
         });
@@ -289,8 +292,8 @@
                 rocketGroup.rotation.z = THREE.MathUtils.degToRad(-(data.pitch || 0) + 90);
 
                 // GPS & Ground Track en Mapa GIS
-                let currentLat = data.lat !== undefined ? data.lat : 28.5721 + Math.sin(Date.now() / 10000) * 5;
-                let currentLon = data.lon !== undefined ? data.lon : -80.6480 + ((Date.now() / 1000) % 360) - 180;
+                let currentLat = data.lat !== undefined ? data.lat : 28.5721;
+                let currentLon = data.lon !== undefined ? data.lon : -80.6480;
                 const newLatLng = [currentLat, currentLon];
 
                 rocketMarker.setLatLng(newLatLng);
@@ -332,10 +335,13 @@
             }
         }
 
+        function setAiPrompt(text) {
+            document.getElementById("ai-prompt").value = text;
+        }
+
         async function queryAI() {
-            const prompt = document.getElementById("ai-prompt").value;
-            if (!prompt) return;
-            document.getElementById("ai-response").innerText = "Consultando a Gemini...";
+            const prompt = document.getElementById("ai-prompt").value || "Estado general de la misión";
+            document.getElementById("ai-response").innerText = "Gemini AI analizando telemetría en tiempo real...";
             try {
                 const res = await fetch("/ai/query", {
                     method: "POST",
@@ -345,7 +351,7 @@
                 const data = await res.json();
                 document.getElementById("ai-response").innerText = data.response || data.error;
             } catch (e) {
-                document.getElementById("ai-response").innerText = "Error de conexión con la IA.";
+                document.getElementById("ai-response").innerText = "Error de enlace con el Copiloto de IA.";
             }
         }
 

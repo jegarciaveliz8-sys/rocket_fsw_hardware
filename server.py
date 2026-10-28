@@ -1,5 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse
 import os
 import asyncio
 from routers import (
@@ -47,7 +47,6 @@ def read_root():
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
-    # Apunta directamente a la carpeta web/flight_dashboard.html que confirmamos que existe
     html_path = os.path.join(BASE_DIR, "web", "flight_dashboard.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
@@ -56,6 +55,10 @@ def get_dashboard():
                 content = content.replace("<title>", "<title>ODYSSEY-1 GCS - Mission Control Center - ")
             return content
     return "<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>Dashboard HTML no encontrado en web/flight_dashboard.html</h1></body></html>"
+
+@app.get("/api/missions")
+def get_missions():
+    return {"missions": [1, 2, 3]}
 
 @app.get("/export/csv")
 def export_csv_root():
@@ -75,24 +78,48 @@ def ai_query_root(payload: dict):
 async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
     try:
-        msg = {}
-        try:
-            msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.2)
-        except (asyncio.TimeoutError, Exception):
-            pass
-        
-        status_val = "POWERED ASCENT" if isinstance(msg, dict) and msg.get("command") == "LAUNCH" else "STANDBY"
-        
-        telemetry_data = {
-            "timestamp": 1793149920,
-            "altitude": 21974.70,
-            "velocity": 777.74,
-            "speed": 777.74,
-            "temperature": 50.03,
-            "status": status_val,
-            "payload": {"status": "nominal"},
-            "failover": "PRIMARY_GCS_ALPHA"
-        }
-        await websocket.send_json(telemetry_data)
+        t = 0
+        current_status = "STANDBY"
+        while True:
+            # Revisar comandos entrantes del cliente sin bloquear el ciclo
+            try:
+                msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
+                if isinstance(msg, dict):
+                    cmd = msg.get("command")
+                    if cmd == "LAUNCH":
+                        current_status = "POWERED ASCENT"
+                    elif cmd in ["ABORT", "RESET"]:
+                        current_status = cmd
+            except (asyncio.TimeoutError, Exception):
+                pass
+            
+            t += 1
+            telemetry_data = {
+                "time": t,
+                "mission_id": 1,
+                "timestamp": 1793149920 + t,
+                "altitude": round(21974.70 + (t * 2.5), 2),
+                "velocity": round(777.74 + (t * 5.0), 2),
+                "speed": round(777.74 + (t * 5.0), 2),
+                "temperature": round(50.03 + (t * 0.1), 2),
+                "status": current_status,
+                "dsn_station": "Madrid (DSS-63)" if (t // 15) % 2 == 0 else "Cape Canaveral",
+                "blackout_status": "BLACKOUT ATMOSFÉRICO" if 10 <= t <= 25 else "NOMINAL (LINK OK)",
+                "orbit_a": 6371.0,
+                "orbit_e": 0.0000,
+                "orbit_i": 28.5,
+                "injected_fault": "NONE",
+                "fdir_action": "NOMINAL",
+                "ccsds_frame": f"081AC0000{t:04X}C4F2...",
+                "pitch": round(15.0 * max(0, 1 - (t/50)), 2),
+                "yaw": 0.0,
+                "roll": round((t * 3) % 360, 2),
+                "lat": round(28.5721 + (t * 0.05), 4),
+                "lon": round(-80.6480 + (t * 0.1), 4),
+                "payload": {"status": "nominal"},
+                "failover": "PRIMARY_GCS_ALPHA"
+            }
+            await websocket.send_json(telemetry_data)
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass

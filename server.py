@@ -1,45 +1,63 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
+import json
+import socket
 import math
 import hashlib
 import hmac
 
-app = FastAPI(title="ODYSSEY-1 World-Class FSW Core", version="1.3.0")
+app = FastAPI(title="ODYSSEY-1 Real HIL FSW Core", version="1.3.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/web", StaticFiles(directory=os.path.join(BASE_DIR, "web")), name="web")
 
 fsw_state = {
     "time": 0,
-    "status": "STANDBY",
-    "altitude": 400.0,
-    "velocity": 7668.5,
+    "status": "HIL HARDWARE STANDBY",
+    "altitude": 0.0,
+    "velocity": 0.0,
     "lat": 28.5721,
     "lon": -80.6480,
-    "rw_momentum": [0.4505, 0.1533, 0.233],
+    "pitch": 0.0,
+    "yaw": 0.0,
+    "roll": 0.0,
+    "rw_momentum": [0.45, 0.15, 0.23],
     "crc_valid": True,
-    "clock_drift_ms": 0.21
+    "clock_drift_ms": 0.12,
+    "source": "SIMULATION"
 }
 
-def calculate_ccsds_frame(apid: int, seq: int, data_payload: bytes) -> str:
-    primary_header = bytes([
-        (0 << 5) | ((apid >> 8) & 0x07),
-        apid & 0xFF,
-        (seq >> 8) & 0xFF,
-        seq & 0xFF,
-        (len(data_payload) >> 8) & 0xFF,
-        len(data_payload) & 0xFF
-    ])
-    full_packet = primary_header + data_payload
-    crc = hmac.new(b"ODYSSEY_WORLD_KEY", full_packet, hashlib.sha256).hexdigest()[:4].upper()
-    return (full_packet.hex() + crc).upper()
+UDP_IP = "0.0.0.0"
+UDP_PORT = 5005
+try:
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.bind((UDP_IP, UDP_PORT))
+    udp_socket.setblocking(False)
+except Exception:
+    udp_socket = None
+
+def check_hardware_udp():
+    if not udp_socket:
+        return False
+    try:
+        data, addr = udp_socket.recvfrom(1024)
+        packet = json.loads(data.decode('utf-8'))
+        fsw_state["altitude"] = packet.get("alt", fsw_state["altitude"])
+        fsw_state["velocity"] = packet.get("vel", fsw_state["velocity"])
+        fsw_state["pitch"] = packet.get("pitch", fsw_state["pitch"])
+        fsw_state["roll"] = packet.get("roll", fsw_state["roll"])
+        fsw_state["status"] = "HIL HARDWARE LINK ACTIVE (ESP32)"
+        fsw_state["source"] = f"PHYSICAL HW ({addr[0]})"
+        return True
+    except (BlockingIOError, socket.error, json.JSONDecodeError, AttributeError):
+        return False
 
 @app.get("/")
 def read_root():
-    return {"system": "ODYSSEY-1 World-Class FSW Core", "status": "nominal", "rtos": "VxWorks 653 Certificado DO-178C"}
+    return {"system": "ODYSSEY-1 HIL Bridge", "status": "active", "udp_port": UDP_PORT}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
@@ -58,36 +76,39 @@ async def websocket_telemetry(websocket: WebSocket):
             try:
                 msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.05)
                 if isinstance(msg, dict) and msg.get("command") == "LAUNCH":
-                    fsw_state["status"] = "ACTIVE FLIGHT (J2 + EKF ACTIVE)"
+                    fsw_state["status"] = "ACTIVE FLIGHT (HIL & J2)"
             except (asyncio.TimeoutError, Exception):
                 pass
 
             t += 1
             fsw_state["time"] = t
-            fsw_state["altitude"] = 400.0 + math.sin(t * 0.1) * 3.2
-            fsw_state["velocity"] = 7668.5 + math.cos(t * 0.1) * 1.5
-            fsw_state["lat"] = round(28.5721 + math.sin(t * 0.05) * 12.0, 4)
-            fsw_state["lon"] = round(-80.6480 + (t * 0.12) % 360 - 180, 4)
+
+            hw_received = check_hardware_udp()
+            if not hw_received and fsw_state["source"] == "SIMULATION":
+                fsw_state["altitude"] = round(400.0 + math.sin(t * 0.1) * 3.0, 2)
+                fsw_state["velocity"] = round(7668.5 + math.cos(t * 0.1) * 1.2, 2)
+                fsw_state["lat"] = round(28.5721 + math.sin(t * 0.05) * 10.0, 4)
+                fsw_state["lon"] = round(-80.6480 + (t * 0.1) % 360 - 180, 4)
 
             payload_bytes = f"ALT:{fsw_state['altitude']}|VEL:{fsw_state['velocity']}|T:{t}".encode('utf-8')
-            ccsds_hex_string = calculate_ccsds_frame(apid=0x01A, seq=t % 65536, data_payload=payload_bytes)
+            crc = hmac.new(b"ODYSSEY_HIL_KEY", payload_bytes, hashlib.sha256).hexdigest()[:4].upper()
 
             telemetry_packet = {
                 "time": t,
-                "altitude": round(fsw_state["altitude"], 2),
-                "velocity": round(fsw_state["velocity"], 2),
+                "altitude": fsw_state["altitude"],
+                "velocity": fsw_state["velocity"],
                 "status": fsw_state["status"],
                 "lat": fsw_state["lat"],
                 "lon": fsw_state["lon"],
-                "pitch": round(math.sin(t * 0.05) * 4.2, 2),
-                "yaw": round(math.cos(t * 0.03) * 2.8, 2),
-                "roll": round((t * 1.2) % 360, 2),
+                "pitch": fsw_state["pitch"] if fsw_state["source"] != "SIMULATION" else round(math.sin(t * 0.05) * 4.0, 2),
+                "yaw": 0.0,
+                "roll": fsw_state["roll"] if fsw_state["source"] != "SIMULATION" else round((t * 1.0) % 360, 2),
                 "rw_momentum": fsw_state["rw_momentum"],
                 "crc_valid": True,
-                "clock_drift_ms": round(0.21 + (t % 5) * 0.01, 2),
-                "ccsds_frame": ccsds_hex_string[:50] + "...",
-                "dsn_station": "Madrid (DSS-63)",
-                "blackout_status": "NOMINAL (AES-GCM SECURE LINK)"
+                "clock_drift_ms": 0.15,
+                "ccsds_frame": f"01AF0008{payload_bytes.hex().upper()[:20]}...{crc}",
+                "dsn_station": "Madrid (DSS-63) [HIL MODE]",
+                "blackout_status": f"SOURCE: {fsw_state['source']}"
             }
 
             await websocket.send_json(telemetry_packet)

@@ -11,17 +11,17 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #05070b; color: #f3f4f6; margin: 0; padding: 15px; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 2px; letter-spacing: 1.5px; font-size: 24px; }
-        .subtitle { text-align: center; color: #94a3b8; font-size: 13px; margin-bottom: 15px; }
-        .container { max-width: 1600px; margin: auto; }
-        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
-        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #030508; color: #f3f4f6; margin: 0; padding: 12px; }
+        h1 { color: #38bdf8; text-align: center; margin-bottom: 2px; letter-spacing: 1.5px; font-size: 22px; }
+        .subtitle { text-align: center; color: #94a3b8; font-size: 12px; margin-bottom: 12px; }
+        .container { max-width: 1650px; margin: auto; }
+        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
+        .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; text-align: center; }
         .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .metric-value { font-size: 20px; font-weight: bold; color: #34d399; }
-        button { background: #0284c7; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; font-size: 12px; transition: background 0.2s; }
+        .metric-value { font-size: 18px; font-weight: bold; color: #34d399; }
+        button { background: #0284c7; color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; font-size: 11px; transition: background 0.2s; }
         button:hover { background: #0369a1; }
         button.danger { background: #dc2626; }
         button.danger:hover { background: #b91c1c; }
@@ -29,24 +29,25 @@
         button.warning:hover { background: #b45309; }
         button.success { background: #16a34a; }
         button.success:hover { background: #15803d; }
-        textarea, input, select { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #334155; background: #020617; color: white; margin-top: 5px; box-sizing: border-box; font-size: 12px; }
-        pre { background: #020617; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 11px; border: 1px solid #1e293b; }
-        .chart-container, .viewer-container, .map-container { position: relative; height: 240px; width: 100%; margin-top: 5px; border-radius: 6px; overflow: hidden; background: #020617; border: 1px solid #1e293b; }
-        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; font-size: 11px; border: 1px solid #1e293b; }
-        .tank-bar { height: 12px; background: #334155; border-radius: 6px; overflow: hidden; margin-top: 5px; }
+        textarea, input, select { width: 100%; padding: 7px; border-radius: 4px; border: 1px solid #334155; background: #020617; color: white; margin-top: 4px; box-sizing: border-box; font-size: 11px; }
+        pre { background: #020617; padding: 8px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 10px; border: 1px solid #1e293b; }
+        .chart-container, .viewer-container, .map-container { position: relative; height: 220px; width: 100%; margin-top: 4px; border-radius: 6px; overflow: hidden; background: #020617; border: 1px solid #1e293b; }
+        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 8px; border-radius: 6px; height: 110px; overflow-y: auto; font-size: 10px; border: 1px solid #1e293b; }
+        .tank-bar { height: 10px; background: #334155; border-radius: 5px; overflow: hidden; margin-top: 3px; }
         .tank-fill { height: 100%; background: #38bdf8; width: 100%; transition: width 0.5s; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (100% INDUSTRIAL FULL-STACK)</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (SUPREME INDUSTRIAL FULL-STACK)</div>
 
         <div class="card" style="text-align: center;">
-            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
+            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span> | Failover: <span id="gcs-node" style="color: #34d399;">PRIMARY (ALPHA)</span></p>
             <div>
                 <button onclick="sendCommand('LAUNCH')">🚀 LANZAMIENTO ORBITAL</button>
-                <button onclick="sendCommand('MECO')">⚡ MECO (Corte de Motor)</button>
+                <button onclick="sendCommand('MECO')">⚡ MECO (Corte Motor)</button>
+                <button onclick="sendCommand('DEPLOY_SOLAR')">☀️ Desplegar Paneles</button>
                 <button class="warning" onclick="sendCommand('INJECT_TVC_FAULT')">⚠️ Inyectar Falla TVC</button>
                 <button class="warning" onclick="sendCommand('INJECT_LOX_LEAK')">⚠️ Inyectar Fuga LOX</button>
                 <button class="danger" onclick="triggerFTS()">🛑 ABORT / FTS ARMADO</button>
@@ -55,11 +56,11 @@
             </div>
         </div>
 
-        <!-- Módulo DVR & Red -->
+        <!-- Módulo DVR & Red Profunda -->
         <div class="grid-2">
             <div class="card" style="border: 1px solid #38bdf8; margin-bottom: 0;">
                 <h3>📼 DVR Replay & Telemetría Histórica</h3>
-                <div style="display: flex; gap: 8px; align-items: center;">
+                <div style="display: flex; gap: 6px; align-items: center;">
                     <select id="mission-select" style="margin-top: 0; flex: 2;">
                         <option value="">Cargando misiones...</option>
                     </select>
@@ -69,15 +70,17 @@
             </div>
             <div class="card" style="border: 1px solid #34d399; margin-bottom: 0;">
                 <h3>📡 Enlace Espacio Profundo & Simulación LOS</h3>
-                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 5px;">
-                    <span>Intensidad Banda S: <strong id="signal-s" style="color: #34d399;">-74.2 dBm</strong></span>
-                    <span>Intensidad Banda X: <strong id="signal-x" style="color: #38bdf8;">-82.5 dBm</strong></span>
-                    <span>Tasa de Error de Bit (BER): <strong style="color: #34d399;">10^-7 (Nominal)</strong></span>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
+                    <span>Banda S: <strong id="signal-s" style="color: #34d399;">-74.2 dBm</strong></span>
+                    <span>Banda X: <strong id="signal-x" style="color: #38bdf8;">-82.5 dBm</strong></span>
+                    <span>Tasa de Bits (BER): <strong style="color: #34d399;">10^-7</strong></span>
+                    <span>Antena HGA: <strong style="color: #38bdf8;">TRACKING (LOCK)</strong></span>
                 </div>
             </div>
         </div>
 
-        <div class="grid-5" style="margin-top: 15px;">
+        <!-- Métricas Principales (6 columnas) -->
+        <div class="grid-6" style="margin-top: 12px;">
             <div class="card">
                 <h3>Altitud EKF</h3>
                 <div id="metric-alt" class="metric-value">0.0 km</div>
@@ -87,33 +90,43 @@
                 <div id="metric-vel" class="metric-value">0.0 km/h</div>
             </div>
             <div class="card">
-                <h3>Presión Cámara (Pc)</h3>
-                <div id="metric-pc" style="color: #38bdf8; font-size: 20px; font-weight: bold;">0.0 MPa</div>
+                <h3>Presión Pc</h3>
+                <div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">0.0 MPa</div>
             </div>
             <div class="card">
-                <h3>Estación DSN Activa</h3>
-                <div id="metric-dsn" style="color: #38bdf8; font-size: 16px; font-weight: bold;">Cape Canaveral</div>
+                <h3>Estación DSN</h3>
+                <div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Cape Canaveral</div>
             </div>
             <div class="card">
-                <h3>Blackout Atmosférico</h3>
-                <div id="metric-blackout" style="color: #34d399; font-size: 15px; font-weight: bold;">NOMINAL</div>
+                <h3>Blackout</h3>
+                <div id="metric-blackout" style="color: #34d399; font-size: 13px; font-weight: bold;">NOMINAL</div>
+            </div>
+            <div class="card">
+                <h3>Temp. OBC</h3>
+                <div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div>
             </div>
         </div>
 
-        <!-- Niveles de Tanques Slosh y Carga Útil -->
-        <div class="grid-2">
+        <!-- Dinámica de Tanques, Salud Térmica y Carga Útil -->
+        <div class="grid-3">
             <div class="card">
-                <h3>⛽ Dinámica de Tanques Propulsantes (LOX / RP-1 Slosh)</h3>
-                <p style="margin: 4px 0; font-size: 12px;">Tanque LOX (Oxidante): <span id="lox-val">100%</span></p>
+                <h3>⛽ Dinámica de Tanques (Slosh)</h3>
+                <p style="margin: 2px 0; font-size: 11px;">Tanque LOX: <span id="lox-val">100%</span></p>
                 <div class="tank-bar"><div id="lox-fill" class="tank-fill" style="width: 100%;"></div></div>
-                <p style="margin: 8px 0 4px 0; font-size: 12px;">Tanque RP-1 (Combustible): <span id="rp1-val">100%</span></p>
+                <p style="margin: 6px 0 2px 0; font-size: 11px;">Tanque RP-1: <span id="rp1-val">100%</span></p>
                 <div class="tank-bar"><div id="rp1-fill" class="tank-fill" style="width: 100%; background: #f59e0b;"></div></div>
             </div>
             <div class="card">
-                <h3>🔬 Telemetría de Carga Útil & Experimento Científico</h3>
-                <p style="margin: 4px 0; font-size: 12px;">Espectrómetro UV: <span style="color: #38bdf8; font-weight: bold;">OPERATIVO (142.3 nm)</span></p>
-                <p style="margin: 4px 0; font-size: 12px;">Dosímetro de Radiación Cósmica: <span style="color: #34d399; font-weight: bold;">0.04 mSv/h (Seguro)</span></p>
-                <p style="margin: 4px 0; font-size: 12px;">Cámara Estelar (Tracker): <span style="color: #34d399; font-weight: bold;">LOCK (18 Estrellas)</span></p>
+                <h3>🌡️ Salud Térmica & Baterías</h3>
+                <p style="margin: 3px 0; font-size: 11px;">Batería Li-Ion Principal: <span style="color: #34d399;">28.4 V (99%)</span></p>
+                <p style="margin: 3px 0; font-size: 11px;">Temp. Paquete Propulsor: <span style="color: #38bdf8;">42.1 °C</span></p>
+                <p style="margin: 3px 0; font-size: 11px;">Bus de Potencia Solar: <span style="color: #34d399;">REGULADO</span></p>
+            </div>
+            <div class="card">
+                <h3>🔬 Telemetría de Carga Útil</h3>
+                <p style="margin: 3px 0; font-size: 11px;">Espectrómetro UV: <span style="color: #38bdf8;">OPERATIVO</span></p>
+                <p style="margin: 3px 0; font-size: 11px;">Radiación Cósmica: <span style="color: #34d399;">0.04 mSv/h</span></p>
+                <p style="margin: 3px 0; font-size: 11px;">Cámara Estelar: <span style="color: #34d399;">LOCK (18 Estrellas)</span></p>
             </div>
         </div>
 
@@ -167,12 +180,12 @@
             <div class="card">
                 <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI (PROACTIVO)</h3>
                 <div style="display: flex; gap: 5px;">
-                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 11px; padding: 4px;">🔍 EKF & Térmico</button>
-                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 11px; padding: 4px;">📡 DSN & CCSDS</button>
+                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 10px; padding: 3px;">🔍 EKF & Térmico</button>
+                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 10px; padding: 3px;">📡 DSN & CCSDS</button>
                 </div>
                 <textarea id="ai-prompt" rows="2" placeholder="Pregunta sobre la órbita, FDIR o tramas CCSDS..."></textarea>
                 <button onclick="queryAI()">🤖 Consultar IA en Vivo</button>
-                <pre id="ai-response" style="height: 50px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
+                <pre id="ai-response" style="height: 45px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
             </div>
         </div>
     </div>
@@ -310,6 +323,7 @@
                 document.getElementById("metric-pc").innerText = (data.pressure || 15.4) + " MPa";
                 document.getElementById("metric-dsn").innerText = data.dsn_station || "Cape Canaveral";
                 document.getElementById("fsw-sequence").innerText = data.status || "STANDBY";
+                document.getElementById("metric-temp").innerText = (38.4 + (data.time || 0) * 0.05).toFixed(1) + " °C";
                 
                 const blackoutEl = document.getElementById("metric-blackout");
                 blackoutEl.innerText = data.blackout_status || "NOMINAL";

@@ -14,7 +14,7 @@
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (MODULAR FULL-STACK)</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (SUPREME MODULAR FULL-STACK)</div>
 
         <div class="card" style="text-align: center;">
             <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span> | Failover: <span id="gcs-node" style="color: #34d399;">PRIMARY (ALPHA)</span></p>
@@ -138,9 +138,12 @@
         </div>
     </div>
 
-    <!-- Cargar Submódulos JS en orden -->
+    <!-- Cargar Submódulos JS en orden modular completo -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
+    <script src="/web/js/hil_hardware.js"></script>
+    <script src="/web/js/monte_carlo.js"></script>
+    <script src="/web/js/bus_power.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
 </body>

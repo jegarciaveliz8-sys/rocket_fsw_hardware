@@ -2,10 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | NASA / ESA Spaceflight Control Center</title>
-    <!-- CSS Modulario -->
+    <title>ODYSSEY-1 | FSW Real-Time Embedded Control Center</title>
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
-    <!-- Librerías Externas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -13,148 +11,61 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (COMPLETITUDE MAXIMUM 200%)</div>
+        <h1>🚀 ODYSSEY-1 | FSW REAL-TIME EMBEDDED CONTROL CENTER</h1>
+        <div class="subtitle">NÚCLEO DE TIEMPO REAL (RTOS) - PROPAGACIÓN J2, TRAMAS CCSDS BINARIAS Y CONTROL DE MOMENTUM RW - V1.3.0</div>
 
-        <!-- Panel de Control y Lanzamiento -->
+        <!-- Panel de Control y Enlaces de Comandos Uplink -->
         <div class="card" style="text-align: center;">
-            <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span> | Failover: <span id="gcs-node" style="color: #34d399;">PRIMARY (ALPHA)</span></p>
+            <p>Estado RTOS: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
             <div>
-                <button onclick="sendCommand('LAUNCH')">🚀 LANZAMIENTO ORBITAL</button>
-                <button onclick="sendCommand('MECO')">⚡ MECO (Corte Motor)</button>
-                <button onclick="sendCommand('DEPLOY_SOLAR')">☀️ Desplegar Paneles</button>
-                <button class="warning" onclick="sendCommand('INJECT_TVC_FAULT')">⚠️ Inyectar Falla TVC</button>
-                <button class="warning" onclick="sendCommand('INJECT_LOX_LEAK')">⚠️ Inyectar Fuga LOX</button>
-                <button class="danger" onclick="triggerFTS()">🛑 ABORT / FTS ARMADO</button>
-                <button onclick="sendCommand('RESET')">🔄 NUEVA MISIÓN</button>
-                <button class="success" onclick="downloadPDF()">📄 Reporte PDF NASA</button>
+                <button onclick="sendCommand('LAUNCH')">🚀 IGNICIÓN & ASCENSO (J2)</button>
+                <button onclick="sendCommand('MECO')">⚡ INSERCIÓN ORBITAL (MECO)</button>
+                <button class="danger" onclick="triggerFTS()">🛑 ABORT / RSO FTS ARMADO</button>
             </div>
         </div>
 
-        <!-- DVR y Enlace Espacio Profundo -->
-        <div class="grid-2">
-            <div class="card" style="border: 1px solid #38bdf8; margin-bottom: 0;">
-                <h3>📼 DVR Replay & Telemetría Histórica</h3>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                    <select id="mission-select" style="margin-top: 0; flex: 2;">
-                        <option value="">Cargando misiones...</option>
-                    </select>
-                    <button class="warning" onclick="startReplay()" style="flex: 1; margin-top: 0;">▶ Reproducir</button>
-                    <button onclick="stopReplay()" style="flex: 1; margin-top: 0; background: #475569;">⏹ En Vivo</button>
-                </div>
-            </div>
-            <div class="card" style="border: 1px solid #34d399; margin-bottom: 0;">
-                <h3>📡 Enlace Espacio Profundo & Simulación LOS</h3>
-                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
-                    <span>Banda S: <strong id="signal-s" style="color: #34d399;">-74.2 dBm</strong></span>
-                    <span>Banda X: <strong id="signal-x" style="color: #38bdf8;">-82.5 dBm</strong></span>
-                    <span>Tasa de Bits (BER): <strong style="color: #34d399;">10^-7</strong></span>
-                    <span>Antena HGA: <strong style="color: #38bdf8;">TRACKING (LOCK)</strong></span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Métricas Principales (6 Columnas) -->
+        <!-- Métricas Principales -->
         <div class="grid-6" style="margin-top: 12px;">
-            <div class="card"><h3>Altitud EKF</h3><div id="metric-alt" class="metric-value">0.0 km</div></div>
-            <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="metric-value">0.0 km/h</div></div>
-            <div class="card"><h3>Presión Pc</h3><div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">0.0 MPa</div></div>
-            <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Cape Canaveral</div></div>
-            <div class="card"><h3>Blackout</h3><div id="metric-blackout" style="color: #34d399; font-size: 13px; font-weight: bold;">NOMINAL</div></div>
+            <div class="card"><h3>Altitud Órbita</h3><div id="metric-alt" class="metric-value">0.0 km</div></div>
+            <div class="card"><h3>Velocidad LEO</h3><div id="metric-vel" class="metric-value">0.0 m/s</div></div>
+            <div class="card"><h3>Presión Cámara</h3><div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">15.4 MPa</div></div>
+            <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Madrid</div></div>
+            <div class="card"><h3>Enlace Seguro</h3><div id="metric-blackout" style="color: #34d399; font-size: 12px; font-weight: bold;">AES-GCM ACTIVE</div></div>
             <div class="card"><h3>Temp. OBC</h3><div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div></div>
-        </div>
-
-        <!-- Tanques, Salud Térmica y Carga Útil -->
-        <div class="grid-3">
-            <div class="card">
-                <h3>⛽ Dinámica de Tanques (Slosh)</h3>
-                <p style="margin: 2px 0; font-size: 11px;">Tanque LOX: <span id="lox-val">100%</span></p>
-                <div class="tank-bar"><div id="lox-fill" class="tank-fill" style="width: 100%;"></div></div>
-                <p style="margin: 6px 0 2px 0; font-size: 11px;">Tanque RP-1: <span id="rp1-val">100%</span></p>
-                <div class="tank-bar"><div id="rp1-fill" class="tank-fill" style="width: 100%; background: #f59e0b;"></div></div>
-            </div>
-            <div class="card">
-                <h3>🌡️ Salud Térmica & Baterías</h3>
-                <p style="margin: 3px 0; font-size: 11px;">Batería Li-Ion Principal: <span style="color: #34d399;">28.4 V (99%)</span></p>
-                <p style="margin: 3px 0; font-size: 11px;">Temp. Paquete Propulsor: <span style="color: #38bdf8;">42.1 °C</span></p>
-                <p style="margin: 3px 0; font-size: 11px;">Bus de Potencia Solar: <span style="color: #34d399;">REGULADO</span></p>
-            </div>
-            <div class="card">
-                <h3>🔬 Telemetría de Carga Útil</h3>
-                <p style="margin: 3px 0; font-size: 11px;">Espectrómetro UV: <span style="color: #38bdf8;">OPERATIVO</span></p>
-                <p style="margin: 3px 0; font-size: 11px;">Radiación Cósmica: <span style="color: #34d399;">0.04 mSv/h</span></p>
-                <p style="margin: 3px 0; font-size: 11px;">Cámara Estelar: <span style="color: #34d399;">LOCK (18 Estrellas)</span></p>
-            </div>
-        </div>
-
-        <!-- Órbitas, FDIR y Tramas CCSDS -->
-        <div class="grid-3">
-            <div class="card">
-                <h3>🛰️ Elementos Orbitales Keplerianos</h3>
-                <p>Semi-eje mayor ($a$): <span id="orbit-a" style="color: #38bdf8; font-weight: bold;">6371.0 km</span></p>
-                <p>Excentricidad ($e$): <span id="orbit-e" style="color: #facc15; font-weight: bold;">0.0000</span></p>
-                <p>Inclinación ($i$): <span id="orbit-i" style="color: #34d399; font-weight: bold;">28.5°</span></p>
-            </div>
-            <div class="card">
-                <h3>🚨 Matriz FDIR (Fault Detection & Recovery)</h3>
-                <p>Falla Inyectada: <span id="fdir-fault" style="color: #f87171; font-weight: bold;">NONE</span></p>
-                <p>Acción Autónoma: <span id="fdir-action" style="color: #34d399; font-weight: bold;">NOMINAL</span></p>
-            </div>
-            <div class="card">
-                <h3>🎛️ Trama Binaria CCSDS (STD 133.0-B-2)</h3>
-                <p>APID: <span style="color: #38bdf8; font-weight: bold;">0x01A</span> | CRC-16: <span style="color: #34d399; font-weight: bold;">VALID</span></p>
-                <pre id="ccsds-hex">081AC0000018...</pre>
-            </div>
         </div>
 
         <!-- Visualización 3D y Mapa GIS -->
         <div class="grid-2">
             <div class="card">
-                <h3>🌌 Actitud 3D en Tiempo Real (Pitch, Yaw, Roll)</h3>
+                <h3>🌌 Actitud Real (Quaternion / Euler)</h3>
                 <div id="three-container" class="viewer-container"></div>
             </div>
             <div class="card">
-                <h3>🗺️ Ground Track GPS & Cobertura DSN (En Vivo)</h3>
+                <h3>🗺️ Ground Track Orbital (Perturbación J2)</h3>
                 <div id="map" class="map-container"></div>
             </div>
         </div>
 
         <!-- Gráfica Dinámica Chart.js -->
         <div class="card">
-            <h3>📊 Gráfica de Telemetría (Altitud y Velocidad)</h3>
+            <h3>📊 Telemetría de Vuelo en Tiempo Real</h3>
             <div class="chart-container">
                 <canvas id="telemetryChart"></canvas>
             </div>
         </div>
 
-        <!-- Consola de Logs y Copiloto Gemini AI -->
-        <div class="grid-2">
-            <div class="card">
-                <h3>📜 Registro MCC Log</h3>
-                <div id="mcc-console" class="console-log">[T+0s] Sistema de Control de Misión NASA inicializado...</div>
-            </div>
-            <div class="card">
-                <h3>🤖 ASISTENTE DE MISIÓN GEMINI AI (PROACTIVO)</h3>
-                <div style="display: flex; gap: 5px;">
-                    <button onclick="setAiPrompt('Analizar estabilidad EKF y márgenes térmicos')" style="font-size: 10px; padding: 3px;">🔍 EKF & Térmico</button>
-                    <button onclick="setAiPrompt('Verificar estado de enlace DSN y tramas CCSDS')" style="font-size: 10px; padding: 3px;">📡 DSN & CCSDS</button>
-                </div>
-                <textarea id="ai-prompt" rows="2" placeholder="Pregunta sobre la órbita, FDIR o tramas CCSDS..."></textarea>
-                <button onclick="queryAI()">🤖 Consultar IA en Vivo</button>
-                <pre id="ai-response" style="height: 45px; overflow-y: auto;">[Gemini AI Proactivo]: Monitoreando parámetros de telemetría de misión en tiempo real...</pre>
-            </div>
+        <!-- Consola de Logs del RTOS -->
+        <div class="card">
+            <h3>📜 Consola de Registros FSW (Kernel Log)</h3>
+            <div id="mcc-console" class="console-log">[T+0s] RTOS kernel inicializado. Esperando comandos uplink...</div>
         </div>
     </div>
 
-    <!-- Carga por Micro-Subsistemas Autónomos Completo -->
+    <!-- Carga de Subsistemas e Inspector de Bits Crudos -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
-    <script src="/web/js/telemetry_ws.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
-    <script src="/web/js/subsystems/hil_card.js"></script>
-    <script src="/web/js/subsystems/monte_carlo_card.js"></script>
-    <script src="/web/js/subsystems/pdu_card.js"></script>
-    <script src="/web/js/subsystems/advanced_spacecraft.js"></script>
-    <script src="/web/js/subsystems/supreme_final.js"></script>
+    <script src="/web/js/subsystems/raw_fsw_inspector.js"></script>
+    <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | FSW Real-Time Embedded Control Center</title>
+    <title>ODYSSEY-1 | World-Class Embedded FSW Control Center</title>
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -11,15 +11,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 ODYSSEY-1 | FSW REAL-TIME EMBEDDED CONTROL CENTER</h1>
-        <div class="subtitle">NÚCLEO DE TIEMPO REAL (RTOS) - PROPAGACIÓN J2, TRAMAS CCSDS BINARIAS Y CONTROL DE MOMENTUM RW - V1.3.0</div>
+        <h1>🚀 ODYSSEY-1 | WORLD-CLASS EMBEDDED FSW CONTROL CENTER</h1>
+        <div class="subtitle">RTOS CERTIFICADO DO-178C - NAVEGACIÓN EKF 6X6, CORRECCIÓN EDAC DE RADIACIÓN SEU Y TELEMETRÍA CCSDS BINARIA</div>
 
-        <!-- Panel de Control y Enlaces de Comandos Uplink -->
+        <!-- Panel de Control RTOS -->
         <div class="card" style="text-align: center;">
             <p>Estado RTOS: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
             <div>
-                <button onclick="sendCommand('LAUNCH')">🚀 IGNICIÓN & ASCENSO (J2)</button>
-                <button onclick="sendCommand('MECO')">⚡ INSERCIÓN ORBITAL (MECO)</button>
+                <button onclick="sendCommand('LAUNCH')">🚀 INICIAR SECUENCIA DE VUELO (EKF + J2)</button>
                 <button class="danger" onclick="triggerFTS()">🛑 ABORT / RSO FTS ARMADO</button>
             </div>
         </div>
@@ -30,7 +29,7 @@
             <div class="card"><h3>Velocidad LEO</h3><div id="metric-vel" class="metric-value">0.0 m/s</div></div>
             <div class="card"><h3>Presión Cámara</h3><div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">15.4 MPa</div></div>
             <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Madrid</div></div>
-            <div class="card"><h3>Enlace Seguro</h3><div id="metric-blackout" style="color: #34d399; font-size: 12px; font-weight: bold;">AES-GCM ACTIVE</div></div>
+            <div class="card"><h3>Enlace Seguro</h3><div id="metric-blackout" style="color: #34d399; font-size: 11px; font-weight: bold;">AES-GCM ACTIVE</div></div>
             <div class="card"><h3>Temp. OBC</h3><div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div></div>
         </div>
 
@@ -57,15 +56,16 @@
         <!-- Consola de Logs del RTOS -->
         <div class="card">
             <h3>📜 Consola de Registros FSW (Kernel Log)</h3>
-            <div id="mcc-console" class="console-log">[T+0s] RTOS kernel inicializado. Esperando comandos uplink...</div>
+            <div id="mcc-console" class="console-log">[T+0s] RTOS kernel inicializado. Subsistemas de navegación EKF y EDAC operacionales.</div>
         </div>
     </div>
 
-    <!-- Carga de Subsistemas e Inspector de Bits Crudos -->
+    <!-- Carga de Subsistemas e Inspector de Bits Crudos + Nivel Mundial -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
     <script src="/web/js/subsystems/raw_fsw_inspector.js"></script>
+    <script src="/web/js/subsystems/world_class_core.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

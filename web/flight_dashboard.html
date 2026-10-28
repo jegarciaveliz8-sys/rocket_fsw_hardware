@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | Ultimate Spaceflight Control Center (Full Stack 4/4)</title>
+    <title>ODYSSEY-1 | Ultimate Spaceflight Control Center (All Systems 100%)</title>
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -11,8 +11,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 ODYSSEY-1 | ULTIMATE SPACEFLIGHT MISSION CONTROL CENTER</h1>
-        <div class="subtitle">ARQUITECTURA SUPREMA - ECLSS, EDL/TRN, SADM Y HARDWARE REAL HIL (UDP/SERIAL) - V1.3.0</div>
+        <h1>🚀 ODYSSEY-1 | OLYMPUS TIER MISSION CONTROL CENTER</h1>
+        <div class="subtitle">ARQUITECTURA SUPREMA INTEGRAL - ROTATOR, WALKER CONSTELLATION, LSTM ML FORECAST Y HIL FÍSICO - V1.3.0</div>
 
         <!-- Panel de Control RTOS -->
         <div class="card" style="text-align: center;">
@@ -56,11 +56,11 @@
         <!-- Consola de Logs del RTOS -->
         <div class="card">
             <h3>📜 Consola de Registros FSW (Kernel Log)</h3>
-            <div id="mcc-console" class="console-log">[T+0s] Sistema supremo inicializado. Módulos ECLSS, EDL, SADM y HIL UDP cargados con éxito.</div>
+            <div id="mcc-console" class="console-log">[T+0s] Sistema Olympus Tier inicializado con éxito. Todos los subsistemas activos.</div>
         </div>
     </div>
 
-    <!-- Carga de Subsistemas (Base + Las 4 Opciones Avanzadas) -->
+    <!-- Carga de Todos los Subsistemas Modulares -->
     <script src="/web/js/three_attitude.js"></script>
     <script src="/web/js/leaflet_gps.js"></script>
     <script src="/web/js/ai_copilot.js"></script>
@@ -72,6 +72,9 @@
     <script src="/web/js/subsystems/edl_trn_module.js"></script>
     <script src="/web/js/subsystems/sadm_module.js"></script>
     <script src="/web/js/subsystems/hil_udp_module.js"></script>
+    <script src="/web/js/subsystems/antenna_rotator.js"></script>
+    <script src="/web/js/subsystems/walker_constellation.js"></script>
+    <script src="/web/js/subsystems/ml_anomaly_forecast.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

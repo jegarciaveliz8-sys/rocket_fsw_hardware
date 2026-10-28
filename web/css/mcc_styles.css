@@ -1,0 +1,24 @@
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #030508; color: #f3f4f6; margin: 0; padding: 12px; }
+h1 { color: #38bdf8; text-align: center; margin-bottom: 2px; letter-spacing: 1.5px; font-size: 22px; }
+.subtitle { text-align: center; color: #94a3b8; font-size: 12px; margin-bottom: 12px; }
+.container { max-width: 1650px; margin: auto; }
+.card { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
+.grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; text-align: center; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.metric-value { font-size: 18px; font-weight: bold; color: #34d399; }
+button { background: #0284c7; color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; font-size: 11px; transition: background 0.2s; }
+button:hover { background: #0369a1; }
+button.danger { background: #dc2626; }
+button.danger:hover { background: #b91c1c; }
+button.warning { background: #d97706; }
+button.warning:hover { background: #b45309; }
+button.success { background: #16a34a; }
+button.success:hover { background: #15803d; }
+textarea, input, select { width: 100%; padding: 7px; border-radius: 4px; border: 1px solid #334155; background: #020617; color: white; margin-top: 4px; box-sizing: border-box; font-size: 11px; }
+pre { background: #020617; padding: 8px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 10px; border: 1px solid #1e293b; }
+.chart-container, .viewer-container, .map-container { position: relative; height: 220px; width: 100%; margin-top: 4px; border-radius: 6px; overflow: hidden; background: #020617; border: 1px solid #1e293b; }
+.console-log { background: #020617; color: #34d399; font-family: monospace; padding: 8px; border-radius: 6px; height: 110px; overflow-y: auto; font-size: 10px; border: 1px solid #1e293b; }
+.tank-bar { height: 10px; background: #334155; border-radius: 5px; overflow: hidden; margin-top: 3px; }
+.tank-fill { height: 100%; background: #38bdf8; width: 100%; transition: width 0.5s; }

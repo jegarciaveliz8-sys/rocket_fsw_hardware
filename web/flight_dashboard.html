@@ -3,44 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | NASA / ESA Spaceflight Control Center</title>
-    <!-- Chart.js -->
+    <!-- CSS Modulario -->
+    <link rel="stylesheet" href="/web/css/mcc_styles.css" />
+    <!-- Librerías Externas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Leaflet GIS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #030508; color: #f3f4f6; margin: 0; padding: 12px; }
-        h1 { color: #38bdf8; text-align: center; margin-bottom: 2px; letter-spacing: 1.5px; font-size: 22px; }
-        .subtitle { text-align: center; color: #94a3b8; font-size: 12px; margin-bottom: 12px; }
-        .container { max-width: 1650px; margin: auto; }
-        .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.4); }
-        .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; text-align: center; }
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .metric-value { font-size: 18px; font-weight: bold; color: #34d399; }
-        button { background: #0284c7; color: white; border: none; padding: 8px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; margin: 2px; font-size: 11px; transition: background 0.2s; }
-        button:hover { background: #0369a1; }
-        button.danger { background: #dc2626; }
-        button.danger:hover { background: #b91c1c; }
-        button.warning { background: #d97706; }
-        button.warning:hover { background: #b45309; }
-        button.success { background: #16a34a; }
-        button.success:hover { background: #15803d; }
-        textarea, input, select { width: 100%; padding: 7px; border-radius: 4px; border: 1px solid #334155; background: #020617; color: white; margin-top: 4px; box-sizing: border-box; font-size: 11px; }
-        pre { background: #020617; padding: 8px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; color: #38bdf8; font-size: 10px; border: 1px solid #1e293b; }
-        .chart-container, .viewer-container, .map-container { position: relative; height: 220px; width: 100%; margin-top: 4px; border-radius: 6px; overflow: hidden; background: #020617; border: 1px solid #1e293b; }
-        .console-log { background: #020617; color: #34d399; font-family: monospace; padding: 8px; border-radius: 6px; height: 110px; overflow-y: auto; font-size: 10px; border: 1px solid #1e293b; }
-        .tank-bar { height: 10px; background: #334155; border-radius: 5px; overflow: hidden; margin-top: 3px; }
-        .tank-fill { height: 100%; background: #38bdf8; width: 100%; transition: width 0.5s; }
-    </style>
 </head>
 <body>
     <div class="container">
         <h1>🚀 ODYSSEY-1 | NASA / ESA MISSION CONTROL CENTER</h1>
-        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (SUPREME INDUSTRIAL FULL-STACK)</div>
+        <div class="subtitle">SISTEMA INTEGRADO DE PROPAGACIÓN ORBITAL, FDIR AUTÓNOMO Y TELEMETRÍA CCSDS - V1.3.0 (MODULAR FULL-STACK)</div>
 
         <div class="card" style="text-align: center;">
             <p>Enlace de Telemetría: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span> | Failover: <span id="gcs-node" style="color: #34d399;">PRIMARY (ALPHA)</span></p>
@@ -56,7 +30,6 @@
             </div>
         </div>
 
-        <!-- Módulo DVR & Red Profunda -->
         <div class="grid-2">
             <div class="card" style="border: 1px solid #38bdf8; margin-bottom: 0;">
                 <h3>📼 DVR Replay & Telemetría Histórica</h3>
@@ -79,35 +52,15 @@
             </div>
         </div>
 
-        <!-- Métricas Principales (6 columnas) -->
         <div class="grid-6" style="margin-top: 12px;">
-            <div class="card">
-                <h3>Altitud EKF</h3>
-                <div id="metric-alt" class="metric-value">0.0 km</div>
-            </div>
-            <div class="card">
-                <h3>Velocidad</h3>
-                <div id="metric-vel" class="metric-value">0.0 km/h</div>
-            </div>
-            <div class="card">
-                <h3>Presión Pc</h3>
-                <div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">0.0 MPa</div>
-            </div>
-            <div class="card">
-                <h3>Estación DSN</h3>
-                <div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Cape Canaveral</div>
-            </div>
-            <div class="card">
-                <h3>Blackout</h3>
-                <div id="metric-blackout" style="color: #34d399; font-size: 13px; font-weight: bold;">NOMINAL</div>
-            </div>
-            <div class="card">
-                <h3>Temp. OBC</h3>
-                <div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div>
-            </div>
+            <div class="card"><h3>Altitud EKF</h3><div id="metric-alt" class="metric-value">0.0 km</div></div>
+            <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="metric-value">0.0 km/h</div></div>
+            <div class="card"><h3>Presión Pc</h3><div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">0.0 MPa</div></div>
+            <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Cape Canaveral</div></div>
+            <div class="card"><h3>Blackout</h3><div id="metric-blackout" style="color: #34d399; font-size: 13px; font-weight: bold;">NOMINAL</div></div>
+            <div class="card"><h3>Temp. OBC</h3><div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div></div>
         </div>
 
-        <!-- Dinámica de Tanques, Salud Térmica y Carga Útil -->
         <div class="grid-3">
             <div class="card">
                 <h3>⛽ Dinámica de Tanques (Slosh)</h3>
@@ -131,20 +84,17 @@
         </div>
 
         <div class="grid-3">
-            <!-- Órbitas Keplerianas -->
             <div class="card">
                 <h3>🛰️ Elementos Orbitales Keplerianos</h3>
                 <p>Semi-eje mayor ($a$): <span id="orbit-a" style="color: #38bdf8; font-weight: bold;">6371.0 km</span></p>
                 <p>Excentricidad ($e$): <span id="orbit-e" style="color: #facc15; font-weight: bold;">0.0000</span></p>
                 <p>Inclinación ($i$): <span id="orbit-i" style="color: #34d399; font-weight: bold;">28.5°</span></p>
             </div>
-            <!-- Matrix FDIR -->
             <div class="card">
                 <h3>🚨 Matriz FDIR (Fault Detection & Recovery)</h3>
                 <p>Falla Inyectada: <span id="fdir-fault" style="color: #f87171; font-weight: bold;">NONE</span></p>
                 <p>Acción Autónoma: <span id="fdir-action" style="color: #34d399; font-weight: bold;">NOMINAL</span></p>
             </div>
-            <!-- CCSDS Frame -->
             <div class="card">
                 <h3>🎛️ Trama Binaria CCSDS (STD 133.0-B-2)</h3>
                 <p>APID: <span style="color: #38bdf8; font-weight: bold;">0x01A</span> | CRC-16: <span style="color: #34d399; font-weight: bold;">VALID</span></p>
@@ -153,12 +103,10 @@
         </div>
 
         <div class="grid-2">
-            <!-- Three.js 3D -->
             <div class="card">
                 <h3>🌌 Actitud 3D en Tiempo Real (Pitch, Yaw, Roll)</h3>
                 <div id="three-container" class="viewer-container"></div>
             </div>
-            <!-- Leaflet GIS -->
             <div class="card">
                 <h3>🗺️ Ground Track GPS & Cobertura DSN (En Vivo)</h3>
                 <div id="map" class="map-container"></div>
@@ -190,247 +138,10 @@
         </div>
     </div>
 
-    <script>
-        let ws;
-        let replayActive = false;
-        let selectedMissionForPDF = 1;
-
-        // --- Three.js ---
-        const container3D = document.getElementById('three-container');
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, container3D.clientWidth / container3D.clientHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(container3D.clientWidth, container3D.clientHeight);
-        container3D.appendChild(renderer.domElement);
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-        scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xffffff, 1);
-        pointLight.position.set(10, 20, 10);
-        scene.add(pointLight);
-
-        const rocketGroup = new THREE.Group();
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 });
-        const noseMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.2 });
-        const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 3, 16);
-        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-        rocketGroup.add(bodyMesh);
-
-        const noseGeo = new THREE.ConeGeometry(0.4, 1.2, 16);
-        const noseMesh = new THREE.Mesh(noseGeo, noseMat);
-        noseMesh.position.y = 2.1;
-        rocketGroup.add(noseMesh);
-
-        scene.add(rocketGroup);
-        camera.position.set(0, 0, 7);
-
-        // --- Leaflet GIS con Radar GPS Orbital y Ground Track ---
-        const map = L.map('map').setView([28.5721, -80.6480], 3);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-            maxZoom: 18,
-            attribution: '© OpenStreetMap | ODYSSEY-1 GPS Tracking'
-        }).addTo(map);
-
-        const rocketMarker = L.marker([28.5721, -80.6480]).addTo(map)
-            .bindPopup("<b>ODYSSEY-1 GCS</b><br>Rastreo GPS Orbital Activo");
-
-        let gpsTrailPoints = [];
-        const trajectoryLine = L.polyline([], { color: '#38bdf8', weight: 3, opacity: 0.8 }).addTo(map);
-
-        const dsnStations = {
-            "Cape Canaveral": [28.5721, -80.6480],
-            "Madrid DSN": [40.4262, -4.2497],
-            "Goldstone DSN": [35.4266, -116.8900],
-            "Canberra DSN": [-35.4014, 148.9817]
-        };
-        for (let name in dsnStations) {
-            L.circle(dsnStations[name], { radius: 800000, color: '#34d399', fillColor: '#34d399', fillOpacity: 0.15 })
-                .addTo(map)
-                .bindPopup(`<b>Estación DSN:</b> ${name}`);
-        }
-
-        // --- Chart.js ---
-        const ctx = document.getElementById('telemetryChart').getContext('2d');
-        const telemetryChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    { label: 'Altitud (km)', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', fill: true },
-                    { label: 'Velocidad (km/h)', data: [], borderColor: '#38bdf8', fill: false }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
-                    y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
-                }
-            }
-        });
-
-        function logEvent(msg, type = "INFO") {
-            const consoleEl = document.getElementById("mcc-console");
-            const timeStr = new Date().toLocaleTimeString();
-            const color = type === "WARN" ? "#facc15" : (type === "ERROR" ? "#f87171" : "#34d399");
-            consoleEl.innerHTML += `<br><span style="color:${color}">[${timeStr}] [${type}]</span> ${msg}`;
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-        }
-
-        async function loadMissionList() {
-            try {
-                const res = await fetch("/api/missions");
-                const data = await res.json();
-                const select = document.getElementById("mission-select");
-                const currentVal = select.value;
-                select.innerHTML = "";
-                if (data.missions && data.missions.length > 0) {
-                    data.missions.forEach(id => {
-                        const opt = document.createElement("option");
-                        opt.value = id;
-                        opt.innerText = `Misión Histórica #${id}`;
-                        select.appendChild(opt);
-                    });
-                    if (currentVal) select.value = currentVal;
-                    selectedMissionForPDF = select.value || data.missions[data.missions.length - 1];
-                } else {
-                    select.innerHTML = `<option value="">No hay misiones grabadas</option>`;
-                }
-            } catch (e) {
-                console.error("Error cargando misiones:", e);
-            }
-        }
-
-        function connectWS() {
-            if (replayActive) return;
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            ws = new WebSocket(wsProtocol + window.location.host + "/ws/telemetry");
-
-            ws.onopen = function() {
-                document.getElementById("ws-status").innerText = "CONNECTED (LIVE)";
-                document.getElementById("ws-status").style.color = "#34d399";
-                logEvent("Enlace CCSDS en vivo establecido con MCC.", "INFO");
-            };
-
-            ws.onmessage = function(event) {
-                if (replayActive) return;
-                const data = JSON.parse(event.data);
-                selectedMissionForPDF = data.mission_id || 1;
-
-                document.getElementById("metric-alt").innerText = (data.altitude || 0) + " km";
-                document.getElementById("metric-vel").innerText = (data.velocity || 0) + " km/h";
-                document.getElementById("metric-pc").innerText = (data.pressure || 15.4) + " MPa";
-                document.getElementById("metric-dsn").innerText = data.dsn_station || "Cape Canaveral";
-                document.getElementById("fsw-sequence").innerText = data.status || "STANDBY";
-                document.getElementById("metric-temp").innerText = (38.4 + (data.time || 0) * 0.05).toFixed(1) + " °C";
-                
-                const blackoutEl = document.getElementById("metric-blackout");
-                blackoutEl.innerText = data.blackout_status || "NOMINAL";
-                blackoutEl.style.color = (data.blackout_status || "").includes("BLACKOUT") ? "#f87171" : "#34d399";
-
-                // Tanques Slosh
-                let loxPct = Math.max(0, 100 - (data.time || 0) * 0.8).toFixed(1);
-                let rp1Pct = Math.max(0, 100 - (data.time || 0) * 0.9).toFixed(1);
-                document.getElementById("lox-val").innerText = loxPct + "%";
-                document.getElementById("lox-fill").style.width = loxPct + "%";
-                document.getElementById("rp1-val").innerText = rp1Pct + "%";
-                document.getElementById("rp1-fill").style.width = rp1Pct + "%";
-
-                document.getElementById("orbit-a").innerText = (data.orbit_a || 6371.0) + " km";
-                document.getElementById("orbit-e").innerText = data.orbit_e || 0.0000;
-                document.getElementById("orbit-i").innerText = (data.orbit_i || 28.5) + "°";
-
-                document.getElementById("fdir-fault").innerText = data.injected_fault || "NONE";
-                document.getElementById("fdir-action").innerText = data.fdir_action || "NOMINAL";
-                document.getElementById("ccsds-hex").innerText = data.ccsds_frame || "081AC0000018...";
-
-                // Rotación 3D
-                rocketGroup.rotation.x = THREE.MathUtils.degToRad(data.roll || 0);
-                rocketGroup.rotation.y = THREE.MathUtils.degToRad(data.yaw || 0);
-                rocketGroup.rotation.z = THREE.MathUtils.degToRad(-(data.pitch || 0) + 90);
-
-                // GPS & Ground Track en Mapa GIS
-                let currentLat = data.lat !== undefined ? data.lat : 28.5721;
-                let currentLon = data.lon !== undefined ? data.lon : -80.6480;
-                const newLatLng = [currentLat, currentLon];
-
-                rocketMarker.setLatLng(newLatLng);
-                gpsTrailPoints.push(newLatLng);
-                if (gpsTrailPoints.length > 100) gpsTrailPoints.shift();
-                trajectoryLine.setLatLngs(gpsTrailPoints);
-                map.panTo(newLatLng, { animate: true });
-
-                if (telemetryChart.data.labels.length > 30) {
-                    telemetryChart.data.labels.shift();
-                    telemetryChart.data.datasets[0].data.shift();
-                    telemetryChart.data.datasets[1].data.shift();
-                }
-                telemetryChart.data.labels.push("T+" + (data.time || 0) + "s");
-                telemetryChart.data.datasets[0].data.push(data.altitude || 0);
-                telemetryChart.data.datasets[1].data.push(data.velocity || 0);
-                telemetryChart.update();
-            };
-
-            ws.onclose = function() {
-                if (!replayActive) {
-                    document.getElementById("ws-status").innerText = "DISCONNECTED";
-                    document.getElementById("ws-status").style.color = "#f87171";
-                    setTimeout(connectWS, 3000);
-                }
-            };
-        }
-
-        function animate3D() {
-            requestAnimationFrame(animate3D);
-            renderer.render(scene, camera);
-        }
-        animate3D();
-
-        function sendCommand(cmd) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ command: cmd }));
-                logEvent(`Comando MCC enviado: ${cmd}`, "INFO");
-            }
-        }
-
-        function triggerFTS() {
-            let code = prompt("🚨 INGRESE CÓDIGO DE DOBLE LLAVE FTS PARA ABORTO DE EMERGENCIA (Ej: ODYSSEY-ABORT):");
-            if (code === "ODYSSEY-ABORT") {
-                sendCommand("ABORT");
-                logEvent("¡SISTEMA FTS ACTIVADO! Destrucción de seguridad ejecutada.", "ERROR");
-            } else {
-                logEvent("Código FTS incorrecto. Aborto cancelado.", "WARN");
-            }
-        }
-
-        function setAiPrompt(text) {
-            document.getElementById("ai-prompt").value = text;
-        }
-
-        async function queryAI() {
-            const prompt = document.getElementById("ai-prompt").value || "Estado general de la misión";
-            document.getElementById("ai-response").innerText = "Gemini AI analizando telemetría en tiempo real...";
-            try {
-                const res = await fetch("/ai/query", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ prompt: prompt })
-                });
-                const data = await res.json();
-                document.getElementById("ai-response").innerText = data.response || data.error;
-            } catch (e) {
-                document.getElementById("ai-response").innerText = "Error de enlace con el Copiloto de IA.";
-            }
-        }
-
-        function downloadPDF() {
-            const missionId = document.getElementById("mission-select").value || selectedMissionForPDF || 1;
-            window.location.href = `/export/pdf/${missionId}`;
-        }
-
-        connectWS();
-        loadMissionList();
-    </script>
+    <!-- Cargar Submódulos JS en orden -->
+    <script src="/web/js/three_attitude.js"></script>
+    <script src="/web/js/leaflet_gps.js"></script>
+    <script src="/web/js/telemetry_ws.js"></script>
+    <script src="/web/js/ai_copilot.js"></script>
 </body>
 </html>

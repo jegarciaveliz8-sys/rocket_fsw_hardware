@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
 from routers import (
@@ -13,7 +14,10 @@ app = FastAPI(title="ODYSSEY-1 GCS", version="1.3.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Registro integral absoluto de los 22 subsistemas de la GCS
+# Servir archivos estáticos de la carpeta web (CSS, JS)
+app.mount("/web", StaticFiles(directory=os.path.join(BASE_DIR, "web")), name="web")
+
+# Registro integral de los 22 subsistemas
 app.include_router(mission.router)
 app.include_router(ai_copilot.router)
 app.include_router(telemetry_export.router)
@@ -39,40 +43,28 @@ app.include_router(orbit_math.router)
 
 @app.get("/")
 def read_root():
-    return {
-        "system": "ODYSSEY-1 GCS",
-        "status": "online",
-        "version": "1.3.0"
-    }
+    return {"system": "ODYSSEY-1 GCS", "status": "online", "version": "1.3.0"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
     html_path = os.path.join(BASE_DIR, "web", "flight_dashboard.html")
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            if "ODYSSEY-1 GCS - Mission Control Center" not in content:
-                content = content.replace("<title>", "<title>ODYSSEY-1 GCS - Mission Control Center - ")
-            return content
-    return "<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>Dashboard HTML no encontrado en web/flight_dashboard.html</h1></body></html>"
+            return f.read()
+    return "<html><body><h1>Dashboard HTML no encontrado en web/flight_dashboard.html</h1></body></html>"
 
 @app.get("/api/missions")
 def get_missions():
     return {"missions": [1, 2, 3]}
 
-@app.get("/export/csv")
-def export_csv_root():
-    csv_content = "Mission Time,timestamp,altitude,velocity,temperature\nT+00:00:01,1793149920,21974.7,777.74,50.03\n"
-    return Response(content=csv_content, media_type="text/csv")
+@app.get("/export/pdf/{mission_id}")
+def export_pdf(mission_id: int):
+    return Response(content=f"PDF Report for Mission #{mission_id}", media_type="application/pdf")
 
 @app.post("/ai/query")
-def ai_query_root(payload: dict):
-    query_text = payload.get("query") or payload.get("prompt", "Estado general")
-    return {
-        "status": "success",
-        "response": f"ODYSSEY-1 AI Copilot: Análisis completado para '{query_text}'.",
-        "confidence": 0.98
-    }
+def ai_query(payload: dict):
+    prompt = payload.get("prompt", "Estado general")
+    return {"response": f"ODYSSEY-1 AI Copilot: Análisis nominal para '{prompt}'."}
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
@@ -81,14 +73,13 @@ async def websocket_telemetry(websocket: WebSocket):
         t = 0
         current_status = "STANDBY"
         while True:
-            # Revisar comandos entrantes del cliente sin bloquear el ciclo
             try:
                 msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.1)
                 if isinstance(msg, dict):
                     cmd = msg.get("command")
                     if cmd == "LAUNCH":
                         current_status = "POWERED ASCENT"
-                    elif cmd in ["ABORT", "RESET"]:
+                    elif cmd in ["ABORT", "RESET", "MECO"]:
                         current_status = cmd
             except (asyncio.TimeoutError, Exception):
                 pass
@@ -101,6 +92,7 @@ async def websocket_telemetry(websocket: WebSocket):
                 "altitude": round(21974.70 + (t * 2.5), 2),
                 "velocity": round(777.74 + (t * 5.0), 2),
                 "speed": round(777.74 + (t * 5.0), 2),
+                "pressure": 15.4,
                 "temperature": round(50.03 + (t * 0.1), 2),
                 "status": current_status,
                 "dsn_station": "Madrid (DSS-63)" if (t // 15) % 2 == 0 else "Cape Canaveral",

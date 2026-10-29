@@ -7,7 +7,7 @@ import math
 import hashlib
 import hmac
 
-from routers import mission_api, subsystems_api
+from routers import mission_api, subsystems_api, ai_copilot
 
 app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
 
@@ -18,6 +18,7 @@ if os.path.exists(web_dir):
 
 app.include_router(mission_api.router)
 app.include_router(subsystems_api.router)
+app.include_router(ai_copilot.router)
 
 @app.get("/")
 def read_root():

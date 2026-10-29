@@ -10,10 +10,10 @@ def export_logs():
 def export_csv():
     return {"export": "success", "format": "csv", "error": "No active telemetry records to export"}
 
-@router.post("/ai/query")
-@router.post("/api/ai/query")
-def ai_query(data: dict):
-    return {"response": "Telemetry nominal."}
+# @router.post("/ai/query")
+# @router.post("/api/ai/query")
+# def ai_query(data: dict):
+#     return {"response": "Telemetry nominal."}
 
 @router.post("/api/dvr/start")
 def dvr_start():

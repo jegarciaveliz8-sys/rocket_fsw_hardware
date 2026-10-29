@@ -6,21 +6,29 @@
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
+    <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
     <style>
-        body { background-color: #0b0f19; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 15px; }
+        body { background-color: #0b0f19; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 15px; box-sizing: border-box; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 15px; }
         h1 { color: #34d399; margin: 0; font-size: 1.3rem; }
-        .dashboard-grid { display: grid; grid-template-columns: 2fr 1.2fr; gap: 15px; }
+        
+        /* Grid balanceado y acotado para evitar estiramientos excesivos */
+        .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 15px; align-items: start; }
         @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 15px; }
-        .card { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; }
-        .card h3 { margin-top: 0; color: #8b949e; font-size: 0.7rem; text-transform: uppercase; }
-        .value { font-size: 1.2rem; font-weight: bold; color: #34d399; }
-        .console-box { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 120px; overflow-y: auto; font-size: 0.75rem; margin-bottom: 15px; }
-        .chart-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 220px; position: relative; margin-bottom: 15px; }
-        .map-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 320px; margin-bottom: 15px; }
-        #map { width: 100%; height: 255px; border-radius: 4px; background: #f8f9fa; }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .card { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; }
+        .card h3 { margin-top: 0; color: #8b949e; font-size: 0.65rem; text-transform: uppercase; }
+        .value { font-size: 1.1rem; font-weight: bold; color: #34d399; }
+        .console-box { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 110px; overflow-y: auto; font-size: 0.75rem; margin-bottom: 15px; }
+        .chart-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 200px; position: relative; margin-bottom: 15px; }
+        .map-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 320px; margin-bottom: 15px; position: relative; }
+        #map { width: 100%; height: 250px; border-radius: 4px; background: #050811; }
         .gps-overlay { display: flex; justify-content: space-between; font-size: 0.7rem; color: #38bdf8; margin-bottom: 6px; font-weight: bold; }
+        .map-controls-bar { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+        .map-btn { background: #21262d; color: #38bdf8; border: 1px solid #30363d; padding: 3px 8px; font-size: 0.65rem; border-radius: 3px; cursor: pointer; font-family: monospace; }
+        .map-btn:hover { background: #30363d; color: #34d399; }
         .btn-controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         button { background: #1f6feb; color: white; border: none; padding: 6px 14px; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
         button:hover { background: #388bfd; }
@@ -28,8 +36,7 @@
         .btn-fts:hover { background: #f85149; }
         .side-panel { display: flex; flex-direction: column; gap: 15px; }
         .code-inspector { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; font-size: 0.7rem; color: #38bdf8; word-break: break-all; }
-        .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 250px; }
-        /* Estilos unificados para que todos los textos del chat tengan el mismo tamaño legible */
+        .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 240px; }
         .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.8rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 8px; background: #050811; border-radius: 4px; display: flex; flex-direction: column; gap: 8px; line-height: 1.3; }
         .ai-messages div { font-size: 0.8rem !important; }
         .ai-input-group { display: flex; gap: 6px; }
@@ -53,48 +60,33 @@
         <!-- Columna Principal -->
         <div>
             <div class="grid">
-                <div class="card">
-                    <h3>Altitud</h3>
-                    <div id="metric-alt" class="value">399.95 km</div>
-                </div>
-                <div class="card">
-                    <h3>Velocidad</h3>
-                    <div id="metric-vel" class="value">7669.7 m/s</div>
-                </div>
-                <div class="card">
-                    <h3>Presión Cámara (Pc)</h3>
-                    <div id="metric-pc" class="value" style="color: #38bdf8;">15.4 MPa</div>
-                </div>
-                <div class="card">
-                    <h3>Estación DSN</h3>
-                    <div id="metric-dsn" class="value" style="font-size: 0.85rem; color: #94a3b8;">Madrid (DSS-63)</div>
-                </div>
-                <div class="card">
-                    <h3>Secuencia FSW</h3>
-                    <div id="fsw-sequence" class="value" style="font-size: 0.85rem; color: #facc15;">STANDBY</div>
-                </div>
-                <div class="card">
-                    <h3>Blackout / Estado</h3>
-                    <div id="metric-blackout" class="value" style="font-size: 0.85rem; color: #38bdf8;">SIMULATION</div>
-                </div>
+                <div class="card"><h3>Altitud</h3><div id="metric-alt" class="value">398.7 km</div></div>
+                <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="value">7669.58 m/s</div></div>
+                <div class="card"><h3>Presión Cámara (Pc)</h3><div id="metric-pc" class="value" style="color: #38bdf8;">15.4 MPa</div></div>
+                <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" class="value" style="font-size: 0.8rem; color: #94a3b8;">Madrid (DSS-63)</div></div>
+                <div class="card"><h3>Secuencia FSW</h3><div id="fsw-sequence" class="value" style="font-size: 0.8rem; color: #facc15;">STANDBY</div></div>
+                <div class="card"><h3>Blackout / Estado</h3><div id="metric-blackout" class="value" style="font-size: 0.8rem; color: #38bdf8;">SIMULATION</div></div>
             </div>
 
-            <div class="chart-container">
-                <canvas id="telemetryChart"></canvas>
-            </div>
+            <div class="chart-container"><canvas id="telemetryChart"></canvas></div>
 
             <div class="map-container">
                 <div class="gps-overlay">
-                    <span>📡 GOOGLE GPS TRACKER & CALLES (High-Res)</span>
+                    <span>📡 GOOGLE ADVANCED GIS & USER RADAR</span>
                     <span>LAT: <span id="gps-lat" style="color:#34d399;">28.5721°</span> | LON: <span id="gps-lon" style="color:#34d399;">-80.6480°</span></span>
+                </div>
+                <div class="map-controls-bar">
+                    <button class="map-btn" onclick="setLayer('roadmap')">🗺️ Google Calles</button>
+                    <button class="map-btn" onclick="setLayer('satellite')">🛰️ Satélite HD</button>
+                    <button class="map-btn" onclick="setLayer('hybrid')">🌐 Híbrido Avanzado</button>
+                    <button class="map-btn" onclick="locateUser()" style="background: #1f6feb; color: white;">📍 Marcar Mi Ubicación</button>
                 </div>
                 <div id="map"></div>
             </div>
 
             <h3>Consola de Misión (RTOS / CCSDS)</h3>
             <div id="mcc-console" class="console-box">
-                [T+0s] Sistema inicializado.<br>
-                [INFO] Enlace binario CCSDS en vivo establecido con el RTOS FSW.
+                [T+0s] Sistema inicializado.<br>[INFO] Arquitectura modular de subsistemas cargada.
             </div>
         </div>
 
@@ -132,74 +124,10 @@
         </div>
     </div>
 
+    <!-- Subsistemas JavaScript Modulares -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map', { maxZoom: 20 }).setView([28.5721, -80.6480], 16);
-        L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-            maxZoom: 20,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-            attribution: '&copy; Google Maps'
-        }).addTo(map);
-
-        const rocketIcon = L.divIcon({
-            className: 'custom-radar-marker',
-            html: '<div style="width:14px; height:14px; background:#ef4444; border:2px solid #ffffff; border-radius:50%; box-shadow: 0 0 12px #ef4444;"></div>',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-        });
-
-        const rocketMarker = L.marker([28.5721, -80.6480], { icon: rocketIcon }).addTo(map);
-        const trajectoryPath = L.polyline([], { color: '#2563eb', weight: 4, opacity: 0.85 }).addTo(map);
-
-        let latestTelemetryData = { altitude: 399.95, velocity: 7669.7, pc: 15.4 };
-
-        window.updateGPSPosition = function(lat, lon) {
-            if (lat !== undefined && lon !== undefined) {
-                const newPos = [lat, lon];
-                rocketMarker.setLatLng(newPos);
-                trajectoryPath.addLatLng(newPos);
-                document.getElementById("gps-lat").innerText = lat.toFixed(4) + "°";
-                document.getElementById("gps-lon").innerText = lon.toFixed(4) + "°";
-            }
-        };
-
-        async function askAI() {
-            const input = document.getElementById("ai-input");
-            const msgs = document.getElementById("ai-messages");
-            const queryText = input.value.trim();
-            if (!queryText) return;
-
-            const userMsg = document.createElement("div");
-            userMsg.innerHTML = `<span style="color: #58a6ff; font-weight: bold;">[Tú]:</span> ${queryText}`;
-            msgs.appendChild(userMsg);
-            
-            input.value = "";
-            msgs.scrollTop = msgs.scrollHeight;
-
-            const loadingMsg = document.createElement("div");
-            loadingMsg.innerHTML = `<span style="color: #facc15; font-weight: bold;">[AI]:</span> Analizando telemetría con Gemini...`;
-            msgs.appendChild(loadingMsg);
-            msgs.scrollTop = msgs.scrollHeight;
-
-            try {
-                const res = await fetch('/api/ai/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: queryText, telemetry_context: latestTelemetryData })
-                });
-                const data = await res.json();
-                
-                loadingMsg.innerHTML = `<span style="color: #34d399; font-weight: bold;">[Gemini AI]:</span> ${data.response}`;
-            } catch (err) {
-                loadingMsg.innerHTML = `<span style="color: #f87171; font-weight: bold;">[Error AI]:</span> No se pudo conectar con el backend de Gemini.`;
-            }
-            msgs.scrollTop = msgs.scrollHeight;
-        }
-
-        function handleAIPress(e) {
-            if (e.key === 'Enter') askAI();
-        }
-    </script>
+    <script src="/web/js/map_module.js"></script>
+    <script src="/web/js/ai_chat_module.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

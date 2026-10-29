@@ -1,11 +1,10 @@
-version: '3.8'
-
 services:
   mcc-backend:
     build: .
     container_name: odyssey_mcc_server
     ports:
-      - "8000:8000"
+      - "8080:8080"
+      - "5005:5005/udp"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - REDIS_URL=redis://redis_cache:6379

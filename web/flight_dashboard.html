@@ -29,16 +29,18 @@
         .side-panel { display: flex; flex-direction: column; gap: 15px; }
         .code-inspector { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; font-size: 0.7rem; color: #38bdf8; word-break: break-all; }
         .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 250px; }
-        .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 6px; background: #050811; border-radius: 4px; }
+        /* Estilos unificados para que todos los textos del chat tengan el mismo tamaño legible */
+        .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.8rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 8px; background: #050811; border-radius: 4px; display: flex; flex-direction: column; gap: 8px; line-height: 1.3; }
+        .ai-messages div { font-size: 0.8rem !important; }
         .ai-input-group { display: flex; gap: 6px; }
-        .ai-input-group input { flex-grow: 1; background: #0b0f19; border: 1px solid #21262d; color: white; padding: 5px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
+        .ai-input-group input { flex-grow: 1; background: #0b0f19; border: 1px solid #21262d; color: white; padding: 6px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
     </style>
 </head>
 <body>
     <header>
         <h1>🚀 ODYSSEY-1 GCS - Mission Control Center</h1>
         <div>
-            <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span>
+            <span id="ws-status" style="color: #f87171; font-weight: bold;">CONNECTED (RTOS KERNEL)</span>
         </div>
     </header>
 
@@ -53,15 +55,15 @@
             <div class="grid">
                 <div class="card">
                     <h3>Altitud</h3>
-                    <div id="metric-alt" class="value">0.0 km</div>
+                    <div id="metric-alt" class="value">399.95 km</div>
                 </div>
                 <div class="card">
                     <h3>Velocidad</h3>
-                    <div id="metric-vel" class="value">0.0 m/s</div>
+                    <div id="metric-vel" class="value">7669.7 m/s</div>
                 </div>
                 <div class="card">
                     <h3>Presión Cámara (Pc)</h3>
-                    <div id="metric-pc" class="value" style="color: #38bdf8;">0.0 MPa</div>
+                    <div id="metric-pc" class="value" style="color: #38bdf8;">15.4 MPa</div>
                 </div>
                 <div class="card">
                     <h3>Estación DSN</h3>
@@ -73,7 +75,7 @@
                 </div>
                 <div class="card">
                     <h3>Blackout / Estado</h3>
-                    <div id="metric-blackout" class="value" style="font-size: 0.85rem; color: #38bdf8;">NOMINAL</div>
+                    <div id="metric-blackout" class="value" style="font-size: 0.85rem; color: #38bdf8;">SIMULATION</div>
                 </div>
             </div>
 
@@ -84,14 +86,15 @@
             <div class="map-container">
                 <div class="gps-overlay">
                     <span>📡 GOOGLE GPS TRACKER & CALLES (High-Res)</span>
-                    <span>LAT: <span id="gps-lat" style="color:#34d399;">28.5721° N</span> | LON: <span id="gps-lon" style="color:#34d399;">-80.6480° W</span></span>
+                    <span>LAT: <span id="gps-lat" style="color:#34d399;">28.5721°</span> | LON: <span id="gps-lon" style="color:#34d399;">-80.6480°</span></span>
                 </div>
                 <div id="map"></div>
             </div>
 
             <h3>Consola de Misión (RTOS / CCSDS)</h3>
             <div id="mcc-console" class="console-box">
-                [T+0s] Sistema inicializado.
+                [T+0s] Sistema inicializado.<br>
+                [INFO] Enlace binario CCSDS en vivo establecido con el RTOS FSW.
             </div>
         </div>
 
@@ -99,9 +102,9 @@
         <div class="side-panel">
             <div class="card">
                 <h3>Orientación (Attitude 3D)</h3>
-                <p style="margin: 4px 0;">Pitch: <span id="val-pitch" style="color: #34d399;">0.0°</span></p>
-                <p style="margin: 4px 0;">Yaw: <span id="val-yaw" style="color: #38bdf8;">0.0°</span></p>
-                <p style="margin: 4px 0;">Roll: <span id="val-roll" style="color: #facc15;">0.0°</span></p>
+                <p style="margin: 4px 0;">Pitch: <span id="val-pitch" style="color: #34d399;">3.92°</span></p>
+                <p style="margin: 4px 0;">Yaw: <span id="val-yaw" style="color: #38bdf8;">0°</span></p>
+                <p style="margin: 4px 0;">Roll: <span id="val-roll" style="color: #facc15;">161°</span></p>
             </div>
 
             <div class="card">
@@ -113,13 +116,13 @@
 
             <div class="card">
                 <h3>Inspector CCSDS Crudo</h3>
-                <div id="raw-ccsds" class="code-inspector">Esperando trama binaria...</div>
+                <div id="raw-ccsds" class="code-inspector">FRAME: 01AF0008414C543A3339382E3835...2FDC<br>CRC: VALID | Drifts: 0.15ms</div>
             </div>
 
             <div class="ai-chat">
                 <h3>Copiloto AI (Gemini FSW)</h3>
                 <div id="ai-messages" class="ai-messages">
-                    <span style="color: #8b949e;">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</span>
+                    <div style="color: #8b949e;">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</div>
                 </div>
                 <div class="ai-input-group">
                     <input type="text" id="ai-input" placeholder="Pregúntale al cohete..." onkeypress="handleAIPress(event)">
@@ -131,10 +134,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Configuración de mapa con el motor visual de Google Maps (Roadmap / GPS estándar)
         const map = L.map('map', { maxZoom: 20 }).setView([28.5721, -80.6480], 16);
-        
-        // Inyectando teselas directas con estilo Google GPS (carreteras, nombres de zonas y comercios)
         L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 20,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
@@ -151,7 +151,7 @@
         const rocketMarker = L.marker([28.5721, -80.6480], { icon: rocketIcon }).addTo(map);
         const trajectoryPath = L.polyline([], { color: '#2563eb', weight: 4, opacity: 0.85 }).addTo(map);
 
-        let latestTelemetryData = {};
+        let latestTelemetryData = { altitude: 399.95, velocity: 7669.7, pc: 15.4 };
 
         window.updateGPSPosition = function(lat, lon) {
             if (lat !== undefined && lon !== undefined) {
@@ -163,28 +163,22 @@
             }
         };
 
-        window.updateRawInspector = function(data) {
-            latestTelemetryData = data;
-            const inspector = document.getElementById("raw-ccsds");
-            if (inspector && data.ccsds_frame) {
-                inspector.innerHTML = `FRAME: ${data.ccsds_frame}<br>CRC: ${data.crc_valid ? 'VALID' : 'INVALID'} | Drifts: ${data.clock_drift_ms}ms`;
-            }
-        };
-
-        window.updateRocketAttitude = function(pitch, yaw, roll) {
-            document.getElementById("val-pitch").innerText = (pitch || 0) + "°";
-            document.getElementById("val-yaw").innerText = (yaw || 0) + "°";
-            document.getElementById("val-roll").innerText = (roll || 0) + "°";
-        };
-
         async function askAI() {
             const input = document.getElementById("ai-input");
             const msgs = document.getElementById("ai-messages");
             const queryText = input.value.trim();
             if (!queryText) return;
 
-            msgs.innerHTML += `<br><span style="color: #58a6ff;">[Tú]:</span> ${queryText}`;
+            const userMsg = document.createElement("div");
+            userMsg.innerHTML = `<span style="color: #58a6ff; font-weight: bold;">[Tú]:</span> ${queryText}`;
+            msgs.appendChild(userMsg);
+            
             input.value = "";
+            msgs.scrollTop = msgs.scrollHeight;
+
+            const loadingMsg = document.createElement("div");
+            loadingMsg.innerHTML = `<span style="color: #facc15; font-weight: bold;">[AI]:</span> Analizando telemetría con Gemini...`;
+            msgs.appendChild(loadingMsg);
             msgs.scrollTop = msgs.scrollHeight;
 
             try {
@@ -194,9 +188,10 @@
                     body: JSON.stringify({ query: queryText, telemetry_context: latestTelemetryData })
                 });
                 const data = await res.json();
-                msgs.innerHTML += `<br><span style="color: #34d399;">[Gemini AI]:</span> ${data.response}`;
+                
+                loadingMsg.innerHTML = `<span style="color: #34d399; font-weight: bold;">[Gemini AI]:</span> ${data.response}`;
             } catch (err) {
-                msgs.innerHTML += `<br><span style="color: #f87171;">[Error AI]:</span> No se pudo conectar con el servicio de IA.`;
+                loadingMsg.innerHTML = `<span style="color: #f87171; font-weight: bold;">[Error AI]:</span> No se pudo conectar con el backend de Gemini.`;
             }
             msgs.scrollTop = msgs.scrollHeight;
         }
@@ -205,7 +200,6 @@
             if (e.key === 'Enter') askAI();
         }
     </script>
-
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

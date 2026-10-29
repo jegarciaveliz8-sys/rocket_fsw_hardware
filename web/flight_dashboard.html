@@ -2,79 +2,12 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 | Ultimate Spaceflight Control Center (All Systems 100%)</title>
+    <title>ODYSSEY-1 GCS - Mission Control Center</title>
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 ODYSSEY-1 | OLYMPUS TIER MISSION CONTROL CENTER</h1>
-        <div class="subtitle">ARQUITECTURA SUPREMA INTEGRAL - ROTATOR, WALKER CONSTELLATION, LSTM ML FORECAST Y HIL FÍSICO - V1.3.0</div>
-
-        <!-- Panel de Control RTOS -->
-        <div class="card" style="text-align: center;">
-            <p>Estado RTOS: <span id="ws-status" style="color: #f87171; font-weight: bold;">DISCONNECTED</span> | Secuencia FSW: <span id="fsw-sequence" style="color: #38bdf8;">STANDBY</span></p>
-            <div>
-                <button onclick="sendCommand('LAUNCH')">🚀 IGNICIÓN Y MISIÓN COMPLETA</button>
-                <button class="danger" onclick="triggerFTS()">🛑 ABORT / RSO FTS ARMADO</button>
-            </div>
-        </div>
-
-        <!-- Métricas Principales -->
-        <div class="grid-6" style="margin-top: 12px;">
-            <div class="card"><h3>Altitud Órbita</h3><div id="metric-alt" class="metric-value">0.0 km</div></div>
-            <div class="card"><h3>Velocidad LEO</h3><div id="metric-vel" class="metric-value">0.0 m/s</div></div>
-            <div class="card"><h3>Presión Cámara</h3><div id="metric-pc" style="color: #38bdf8; font-size: 18px; font-weight: bold;">15.4 MPa</div></div>
-            <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" style="color: #38bdf8; font-size: 14px; font-weight: bold;">Madrid</div></div>
-            <div class="card"><h3>Enlace Seguro</h3><div id="metric-blackout" style="color: #34d399; font-size: 11px; font-weight: bold;">AES-GCM ACTIVE</div></div>
-            <div class="card"><h3>Temp. OBC</h3><div id="metric-temp" style="color: #f59e0b; font-size: 18px; font-weight: bold;">38.4 °C</div></div>
-        </div>
-
-        <!-- Visualización 3D y Mapa GIS -->
-        <div class="grid-2">
-            <div class="card">
-                <h3>🌌 Actitud Real (Quaternion / Euler)</h3>
-                <div id="three-container" class="viewer-container"></div>
-            </div>
-            <div class="card">
-                <h3>🗺️ Ground Track Orbital (Perturbación J2)</h3>
-                <div id="map" class="map-container"></div>
-            </div>
-        </div>
-
-        <!-- Gráfica Dinámica Chart.js -->
-        <div class="card">
-            <h3>📊 Telemetría de Vuelo en Tiempo Real</h3>
-            <div class="chart-container">
-                <canvas id="telemetryChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Consola de Logs del RTOS -->
-        <div class="card">
-            <h3>📜 Consola de Registros FSW (Kernel Log)</h3>
-            <div id="mcc-console" class="console-log">[T+0s] Sistema Olympus Tier inicializado con éxito. Todos los subsistemas activos.</div>
-        </div>
-    </div>
-
-    <!-- Carga de Todos los Subsistemas Modulares -->
-    <script src="/web/js/three_attitude.js"></script>
-    <script src="/web/js/leaflet_gps.js"></script>
-    <script src="/web/js/ai_copilot.js"></script>
-    <script src="/web/js/subsystems/raw_fsw_inspector.js"></script>
-    <script src="/web/js/subsystems/world_class_core.js"></script>
-    <script src="/web/js/subsystems/deep_space_autonomy.js"></script>
-    <script src="/web/js/subsystems/deep_space_propulsion.js"></script>
-    <script src="/web/js/subsystems/eclss_module.js"></script>
-    <script src="/web/js/subsystems/edl_trn_module.js"></script>
-    <script src="/web/js/subsystems/sadm_module.js"></script>
-    <script src="/web/js/subsystems/hil_udp_module.js"></script>
-    <script src="/web/js/subsystems/antenna_rotator.js"></script>
-    <script src="/web/js/subsystems/walker_constellation.js"></script>
-    <script src="/web/js/subsystems/ml_anomaly_forecast.js"></script>
+    <h1>ODYSSEY-1 GCS - Mission Control Center</h1>
+    <div id="mcc-console">[T+0s] Sistema inicializado.</div>
     <script src="/web/js/telemetry_ws.js"></script>
 </body>
 </html>

@@ -1,44 +1,54 @@
-// --- LÓGICA PRINCIPAL GCS ODYSSEY-1 ---
-let dynamicWaypoints = [];
+const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
 
-document.addEventListener("DOMContentLoaded", () => {
-    initWebSocket();
-});
+ws.onmessage = function(event) {
+    const pkt = JSON.parse(event.data);
+    
+    document.getElementById("val-alt").innerText = pkt.altitude + " m";
+    document.getElementById("val-vel").innerText = pkt.velocity + " m/s";
+    document.getElementById("val-pc").innerText = pkt.chamber_pressure + " MPa";
+    document.getElementById("val-bat").innerText = pkt.battery_pct + " %";
+    document.getElementById("lbl-status").innerText = pkt.status;
+    document.getElementById("lbl-met").innerText = `MET: T+${String(Math.floor(pkt.time/60)).padStart(2,'0')}:${String(pkt.time%60).padStart(2,'0')}`;
+    
+    document.getElementById("val-pitch").innerText = (pkt.pitch || 0) + "°";
+    document.getElementById("val-roll").innerText = (pkt.roll || 0) + "°";
+    document.getElementById("val-yaw").innerText = (pkt.yaw || 0) + "°";
+    document.getElementById("val-ccsds").innerText = pkt.ccsds_frame;
 
-function initWebSocket() {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
+    let currentLat = pkt.lat;
+    let currentLon = pkt.lon;
 
-    ws.onmessage = function(event) {
-        const pkt = JSON.parse(event.data);
-        
-        document.getElementById("val-alt").innerText = pkt.altitude + " m";
-        document.getElementById("val-vel").innerText = pkt.velocity + " m/s";
-        document.getElementById("val-pc").innerText = pkt.chamber_pressure + " MPa";
-        document.getElementById("val-bat").innerText = pkt.battery_pct + " %";
-        document.getElementById("lbl-status").innerText = pkt.status;
-        document.getElementById("lbl-met").innerText = `MET: T+${String(Math.floor(pkt.time/60)).padStart(2,'0')}:${String(pkt.time%60).padStart(2,'0')}`;
-        
-        document.getElementById("val-pitch").innerText = (pkt.pitch || 0) + "°";
-        document.getElementById("val-roll").innerText = (pkt.roll || 0) + "°";
-        document.getElementById("val-yaw").innerText = (pkt.yaw || 0) + "°";
-        document.getElementById("val-ccsds").innerText = pkt.ccsds_frame;
+    if (!currentLat || !currentLon) {
+        const timeOffset = (pkt.time || 0) * 0.0008;
+        currentLat = 14.7883 + Math.sin(timeOffset) * 0.0035;
+        currentLon = -90.1988 + Math.cos(timeOffset) * 0.0035;
+    }
 
-        if (window.updateDronePosition && pkt.lat && pkt.lon) {
-            window.updateDronePosition(pkt.lat, pkt.lon);
-        }
+    const pos = [currentLat, currentLon];
+    droneMarker.setLatLng(pos);
+    trajectoryPath.addLatLng(pos);
 
-        if (pkt.alerts && pkt.alerts.length > 0) {
-            pkt.alerts.forEach(alert => {
-                logConsole(`[ALERTA FSW] ${alert}`);
-            });
-        }
-    };
-}
+    if (pkt.alerts && pkt.alerts.length > 0) {
+        pkt.alerts.forEach(alert => {
+            logConsole(`[ALERTA FSW] ${alert}`);
+        });
+    }
+};
 
 async function startMission() {
-    await fetch('/api/mission/start', { method: 'POST' });
-    logConsole("[COMANDO] Misión autónoma iniciada en Sanarate.");
+    if (dynamicWaypoints.length === 0) {
+        alert("Haz clic en el mapa para trazar al menos un waypoint antes de iniciar.");
+        return;
+    }
+
+    await fetch('/api/mission/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ waypoints: dynamicWaypoints })
+    });
+
+    logConsole(`[COMANDO] Misión iniciada con ${dynamicWaypoints.length} waypoints de ruta.`);
 }
 
 async function abortMission() {
@@ -70,29 +80,20 @@ async function loadSavedMission() {
     const res = await fetch('/api/mission-planner/load');
     const r = await res.json();
     if (r.status === "SUCCESS") {
+        clearMissionPath();
         dynamicWaypoints = r.waypoints;
-        renderWaypointsList();
+        
+        dynamicWaypoints.forEach((wp, index) => {
+            const marker = L.circleMarker([wp.lat, wp.lon], { radius: 6, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.9 }).addTo(map)
+             .bindPopup(`<b>${wp.name || 'WP Cargado'}</b><br>Lat: ${wp.lat.toFixed(4)}<br>Lon: ${wp.lon.toFixed(4)}`);
+            waypointMarkers.push(marker);
+        });
+
+        renderWaypointsTable();
         alert(`Misión cargada (${dynamicWaypoints.length} waypoints).`);
     } else {
         alert("No hay misiones guardadas.");
     }
-}
-
-function clearMissionPath() {
-    dynamicWaypoints = [];
-    renderWaypointsList();
-    logConsole("[MAPA] Waypoints limpiados.");
-}
-
-function renderWaypointsList() {
-    const container = document.getElementById("waypoints-list-container");
-    if (!container) return;
-    if (dynamicWaypoints.length === 0) { container.innerHTML = "No hay waypoints."; return; }
-    let html = "";
-    dynamicWaypoints.forEach((wp, i) => {
-        html += `<div><b>WP${i}:</b> ${wp.lat.toFixed(4)}, ${wp.lon.toFixed(4)}</div>`;
-    });
-    container.innerHTML = html;
 }
 
 async function queryAICopilot() {

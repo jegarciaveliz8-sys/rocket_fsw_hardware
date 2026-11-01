@@ -1,60 +1,96 @@
 import math
-import random
+import time
 
 class MissionNavigator:
     def __init__(self):
-        self.waypoints = [
-            {"id": 0, "name": "Base Sanarate", "lat": 14.7883, "lon": -90.1988, "alt": 25.0},
-            {"id": 1, "name": "Norte Zona Alta", "lat": 14.7920, "lon": -90.1970, "alt": 40.0},
-            {"id": 2, "name": "Desplazamiento Oeste", "lat": 14.7910, "lon": -90.2030, "alt": 50.0},
-            {"id": 3, "name": "Giro Sur Perímetro", "lat": 14.7850, "lon": -90.2010, "alt": 45.0},
-            {"id": 4, "name": "Aproximación Base", "lat": 14.7865, "lon": -90.1995, "alt": 30.0},
-            {"id": 5, "name": "RTL / Aterrizaje", "lat": 14.7883, "lon": -90.1988, "alt": 5.0}
-        ]
+        self.waypoints = []
         self.current_wp_index = 0
         self.is_active = False
+        self.loiter_timer = 0
+        self.loiter_duration = 0
+        self.action_triggered = False
+        self.base_coords = {"lat": 14.7883, "lon": -90.1988, "alt": 0.0}
 
-    def start_mission(self):
+    def load_waypoints(self, waypoints):
+        self.waypoints = waypoints
+        self.current_wp_index = 0
         self.is_active = True
-        self.current_wp_index = 0
-        return {"status": "SUCCESS", "message": "Misión autónoma iniciada en Sanarate"}
+        self.loiter_timer = 0
+        self.action_triggered = False
 
-    def abort_mission(self):
-        self.is_active = False
-        return {"status": "ABORTED", "message": "Misión detenida / RTL forzado"}
-
-    def get_next_position(self, current_lat, current_lon, current_alt):
+    def update_position(self, current_state):
         if not self.is_active or not self.waypoints:
-            return current_lat, current_lon, current_alt, "STANDBY / READY"
+            return current_state
+
+        # Si ya terminamos todos los waypoints, activar RTL automático a la base
+        if self.current_wp_index >= len(self.waypoints):
+            return self.execute_rtl(current_state)
 
         target = self.waypoints[self.current_wp_index]
-        
-        # Interpolación lineal simple hacia el Waypoint objetivo
-        lat_diff = target["lat"] - current_lat
-        lon_diff = target["lon"] - current_lon
-        alt_diff = target["alt"] - current_alt
+        target_lat = target.get("lat", 14.7883)
+        target_lon = target.get("lon", -90.1988)
+        target_alt = target.get("alt", 35.0)
+        loiter_time = target.get("loiter", 0) # Segundos de espera
 
-        step = 0.00015  # Velocidad de avance en el mapa
+        curr_lat = current_state["lat"]
+        curr_lon = current_state["lon"]
+
+        # Calcular distancia aproximada al waypoint actual
+        lat_diff = target_lat - curr_lat
+        lon_diff = target_lon - curr_lon
         distance = math.sqrt(lat_diff**2 + lon_diff**2)
 
-        if distance < 0.0002:
-            # Llegó al waypoint, pasar al siguiente
-            status = f"WAYPOINT {self.current_wp_index} ALCANZADO"
-            self.current_wp_index += 1
-            if self.current_wp_index >= len(self.waypoints):
-                self.is_active = False
-                return target["lat"], target["lon"], target["alt"], "MISSION COMPLETE (RTL)"
-            return target["lat"], target["lon"], target["alt"], status
+        # Umbral de llegada (aproximadamente 5-10 metros)
+        if distance < 0.00015:
+            # Llegó al waypoint
+            if loiter_time > 0:
+                if self.loiter_timer == 0:
+                    self.loiter_timer = time.time()
+                    current_state.setdefault("alerts", []).append(f"Llegando a WP{self.current_wp_index}. Iniciando Loiter ({loiter_time}s) y ráfaga fotográfica 📸")
+                
+                elapsed = time.time() - self.loiter_timer
+                current_state["velocity"] = 0.0 # Estacionario en Loiter
+                
+                if elapsed >= loiter_time:
+                    # Termino el Loiter, pasar al siguiente punto
+                    self.loiter_timer = 0
+                    self.current_wp_index += 1
+            else:
+                # Sin loiter, disparo rápido y avanzar
+                current_state.setdefault("alerts", []).append(f"WP{self.current_wp_index} alcanzado. 📸 Foto capturada.")
+                self.current_wp_index += 1
         else:
-            new_lat = current_lat + (lat_diff / distance) * step
-            new_lon = current_lon + (lon_diff / distance) * step
-            
-            # --- SIMULADOR DE VIENTO Y PERTURBACIONES ATMOSFÉRICAS ---
-            wind_gust_alt = random.uniform(-0.4, 0.4)
-            new_alt = current_alt + (alt_diff * 0.1) + wind_gust_alt
-            new_alt = max(2.0, new_alt)
-            
-            status = f"NAVIGATING TO WP{self.current_wp_index} ({target['name']})"
-            return new_lat, new_lon, new_alt, status
+            # Tránsito hacia el waypoint (interpolación suave)
+            speed = 0.00008 # Velocidad de avance vectorial
+            current_state["lat"] += (lat_diff / distance) * speed
+            current_state["lon"] += (lon_diff / distance) * speed
+            current_state["altitude"] = target_alt
+            current_state["velocity"] = 12.5
+
+        return current_state
+
+    def execute_rtl(self, current_state):
+        # Modo Return to Launch hacia la base de Sanarate
+        lat_diff = self.base_coords["lat"] - current_state["lat"]
+        lon_diff = self.base_coords["lon"] - current_state["lon"]
+        distance = math.sqrt(lat_diff**2 + lon_diff**2)
+
+        if distance < 0.00015:
+            current_state["lat"] = self.base_coords["lat"]
+            current_state["lon"] = self.base_coords["lon"]
+            current_state["altitude"] = 0.0
+            current_state["velocity"] = 0.0
+            current_state["status"] = "MISSION COMPLETE / LANDED"
+            self.is_active = False
+            current_state.setdefault("alerts", []).append("RTL completado con éxito. Aterrizaje en Base Sanarate.")
+        else:
+            speed = 0.0001
+            current_state["lat"] += (lat_diff / distance) * speed
+            current_state["lon"] += (lon_diff / distance) * speed
+            current_state["altitude"] = 25.0
+            current_state["velocity"] = 15.0
+            current_state["status"] = "RTL (RETURNING TO LAUNCH)"
+
+        return current_state
 
 navigator = MissionNavigator()

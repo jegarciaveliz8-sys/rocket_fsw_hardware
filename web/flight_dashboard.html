@@ -4,56 +4,7 @@
     <meta charset="UTF-8">
     <title>ODYSSEY-1 GCS - Mission Control Center [Sanarate HIL]</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        header { background: #161b22; border-bottom: 1px solid #30363d; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; height: 55px; }
-        header h1 { font-size: 16px; color: #58a6ff; display: flex; align-items: center; gap: 10px; }
-        .badge { background: #238636; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
-        .met-timer { background: #21262d; border: 1px solid #30363d; padding: 4px 12px; border-radius: 6px; font-family: monospace; font-size: 14px; color: #f0f6fc; }
-        
-        /* Layout de 3 columnas */
-        .workspace { display: grid; grid-template-columns: 280px 1fr 340px; grid-template-rows: 1fr 140px; flex: 1; gap: 8px; padding: 8px; overflow: hidden; }
-        
-        .col-left { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-        .col-center { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 8px; position: relative; border-radius: 6px; overflow: hidden; border: 1px solid #30363d; }
-        .col-right { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-        
-        .panel { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .panel h3 { font-size: 11px; text-transform: uppercase; color: #8b949e; border-bottom: 1px solid #30363d; padding-bottom: 4px; letter-spacing: 0.5px; }
-        
-        /* Mapa */
-        #map { width: 100%; height: 100%; flex: 1; z-index: 1; }
-        .map-controls { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(22,27,34,0.9); padding: 4px; border-radius: 6px; border: 1px solid #30363d; display: flex; gap: 4px; }
-        .map-controls button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
-        .map-controls button:hover { background: #30363d; color: #58a6ff; }
-
-        /* Consola inferior */
-        #console-container { grid-column: 1 / 4; grid-row: 2; background: #090d11; border: 1px solid #30363d; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; }
-        #mcc-console { flex: 1; font-family: monospace; font-size: 11px; color: #34d399; overflow-y: auto; white-space: pre-wrap; line-height: 1.3; }
-
-        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .metric-card { background: #21262d; padding: 6px; border-radius: 4px; text-align: center; border: 1px solid #30363d; }
-        .metric-card span { display: block; font-size: 9px; color: #8b949e; }
-        .metric-card strong { font-size: 14px; color: #f0f6fc; font-family: monospace; }
-
-        .btn-action { background: #238636; color: white; border: none; padding: 7px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; text-align: center; font-size: 11px; }
-        .btn-action:hover { background: #2ea043; }
-        .btn-danger { background: #da3633; }
-        .btn-danger:hover { background: #f85149; }
-
-        .chat-box { background: #090d11; border: 1px solid #30363d; border-radius: 4px; padding: 6px; font-size: 11px; overflow-y: auto; height: 65px; line-height: 1.3; }
-        .chat-input { display: flex; gap: 4px; margin-top: 4px; }
-        .chat-input input { flex: 1; background: #21262d; border: 1px solid #30363d; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; outline: none; }
-        .subsystem-box { font-size: 11px; display: flex; flex-direction: column; gap: 4px; background: #21262d; padding: 6px; border-radius: 4px; border: 1px solid #30363d; }
-
-        /* Estilo para la tabla de Waypoints */
-        .wp-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
-        .wp-table th { background: #21262d; color: #8b949e; padding: 4px; text-align: left; border-bottom: 1px solid #30363d; }
-        .wp-table td { padding: 4px; border-bottom: 1px solid #21262d; }
-        .wp-table input[type="number"] { width: 50px; background: #090d11; border: 1px solid #30363d; color: #fff; padding: 2px 4px; border-radius: 3px; font-size: 11px; }
-    </style>
+    <link rel="stylesheet" href="/static/css/gcs_styles.css" />
 </head>
 <body>
 
@@ -130,12 +81,13 @@
                             <tr>
                                 <th>#</th>
                                 <th>Lat/Lon</th>
-                                <th>Alt(m)</th>
-                                <th>Acción</th>
+                                <th>Alt</th>
+                                <th>Loiter</th>
+                                <th>Del</th>
                             </tr>
                         </thead>
                         <tbody id="waypoints-table-body">
-                            <tr><td colspan="4" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>
+                            <tr><td colspan="5" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -177,229 +129,9 @@
 
     </div>
 
-    <!-- Scripts -->
+    <!-- Scripts Leaflet y Módulos GCS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map', { maxZoom: 20 }).setView([14.7883, -90.1988], 15);
-        const layers = {
-            roadmap: L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }),
-            satellite: L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }),
-            hybrid: L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] })
-        };
-        let activeLayer = layers.hybrid.addTo(map);
-
-        function setLayer(name) {
-            if (layers[name]) {
-                map.removeLayer(activeLayer);
-                activeLayer = layers[name].addTo(map);
-            }
-        }
-        function locateUser() { map.setView([14.7883, -90.1988], 16); }
-
-        const droneIcon = L.divIcon({
-            className: 'custom-drone',
-            html: '<div style="width:16px; height:16px; background:#ef4444; border:2px solid #fff; border-radius:50%; box-shadow:0 0 10px #ef4444;"></div>',
-            iconSize: [16, 16], iconAnchor: [8, 8]
-        });
-        const droneMarker = L.marker([14.7883, -90.1988], { icon: droneIcon }).addTo(map).bindPopup("<b>ODYSSEY-1 Sanarate Base</b>");
-        const trajectoryPath = L.polyline([], { color: '#38bdf8', weight: 4, opacity: 0.85 }).addTo(map);
-
-        let dynamicWaypoints = [];
-        let waypointMarkers = [];
-
-        map.on('click', async function(e) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
-            const wpData = { lat: lat, lon: lon, alt: 35.0, name: `WP Sanarate #${dynamicWaypoints.length + 1}` };
-            
-            dynamicWaypoints.push(wpData);
-            
-            const marker = L.circleMarker([lat, lon], { radius: 6, color: '#facc15', fillColor: '#facc15', fillOpacity: 0.9 }).addTo(map)
-             .bindPopup(`<b>${wpData.name}</b><br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}`);
-            waypointMarkers.push(marker);
-
-            renderWaypointsTable();
-            logConsole(`[MAPA] Waypoint añadido: ${wpData.name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
-        });
-
-        function renderWaypointsTable() {
-            const tbody = document.getElementById("waypoints-table-body");
-            if (!tbody) return;
-            
-            if (dynamicWaypoints.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>`;
-                return;
-            }
-
-            let html = "";
-            dynamicWaypoints.forEach((wp, i) => {
-                html += `
-                    <tr>
-                        <td><b>WP${i}</b></td>
-                        <td style="font-family:monospace; font-size:10px;">${wp.lat.toFixed(3)},<br>${wp.lon.toFixed(3)}</td>
-                        <td><input type="number" value="${wp.alt}" onchange="updateWaypointAlt(${i}, this.value)"></td>
-                        <td><button onclick="removeWaypoint(${i})" style="background:#da3633; color:#fff; border:none; padding:2px 6px; border-radius:3px; cursor:pointer;">X</button></td>
-                    </tr>
-                `;
-            });
-            tbody.innerHTML = html;
-        }
-
-        function updateWaypointAlt(index, newAlt) {
-            if (dynamicWaypoints[index]) {
-                dynamicWaypoints[index].alt = parseFloat(newAlt) || 0.0;
-                logConsole(`[PLANIFICADOR] WP${index} altitud actualizada a ${newAlt}m`);
-            }
-        }
-
-        function removeWaypoint(index) {
-            if (waypointMarkers[index]) {
-                map.removeLayer(waypointMarkers[index]);
-                waypointMarkers.splice(index, 1);
-            }
-            dynamicWaypoints.splice(index, 1);
-            renderWaypointsTable();
-            logConsole(`[PLANIFICADOR] Waypoint #${index} eliminado.`);
-        }
-
-        function clearMissionPath() {
-            waypointMarkers.forEach(marker => map.removeLayer(marker));
-            waypointMarkers = [];
-            dynamicWaypoints = [];
-            renderWaypointsTable();
-            logConsole("[MAPA] Todos los waypoints fueron limpiados.");
-        }
-
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
-
-        ws.onmessage = function(event) {
-            const pkt = JSON.parse(event.data);
-            
-            document.getElementById("val-alt").innerText = pkt.altitude + " m";
-            document.getElementById("val-vel").innerText = pkt.velocity + " m/s";
-            document.getElementById("val-pc").innerText = pkt.chamber_pressure + " MPa";
-            document.getElementById("val-bat").innerText = pkt.battery_pct + " %";
-            document.getElementById("lbl-status").innerText = pkt.status;
-            document.getElementById("lbl-met").innerText = `MET: T+${String(Math.floor(pkt.time/60)).padStart(2,'0')}:${String(pkt.time%60).padStart(2,'0')}`;
-            
-            document.getElementById("val-pitch").innerText = (pkt.pitch || 0) + "°";
-            document.getElementById("val-roll").innerText = (pkt.roll || 0) + "°";
-            document.getElementById("val-yaw").innerText = (pkt.yaw || 0) + "°";
-            document.getElementById("val-ccsds").innerText = pkt.ccsds_frame;
-
-            let currentLat = pkt.lat;
-            let currentLon = pkt.lon;
-
-            if (!currentLat || !currentLon) {
-                const timeOffset = (pkt.time || 0) * 0.0008;
-                currentLat = 14.7883 + Math.sin(timeOffset) * 0.0035;
-                currentLon = -90.1988 + Math.cos(timeOffset) * 0.0035;
-            }
-
-            const pos = [currentLat, currentLon];
-            droneMarker.setLatLng(pos);
-            trajectoryPath.addLatLng(pos);
-
-            if (pkt.alerts && pkt.alerts.length > 0) {
-                pkt.alerts.forEach(alert => {
-                    logConsole(`[ALERTA FSW] ${alert}`);
-                });
-            }
-        };
-
-        // --- FUNCIÓN ACTUALIZADA PARA ENVIAR LOS WAYPOINTS AUTOMÁTICAMENTE ---
-        async function startMission() {
-            if (dynamicWaypoints.length === 0) {
-                alert("Haz clic en el mapa para trazar al menos un waypoint antes de iniciar.");
-                return;
-            }
-
-            await fetch('/api/mission/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ waypoints: dynamicWaypoints })
-            });
-
-            logConsole(`[COMANDO] Misión iniciada con ${dynamicWaypoints.length} waypoints de ruta.`);
-        }
-
-        async function abortMission() {
-            await fetch('/api/mission/abort', { method: 'POST' });
-            logConsole("[COMANDO] Misión abortada / RTL forzado.");
-        }
-
-        async function toggleFault(faultName, checkbox) {
-            await fetch('/api/fault/inject', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fault: faultName, active: checkbox.checked })
-            });
-            logConsole(`[INYECCIÓN] ${faultName} -> ${checkbox.checked ? 'ACTIVADO' : 'DESACTIVADO'}`);
-        }
-
-        async function saveCurrentMission() {
-            if (dynamicWaypoints.length === 0) { alert("No hay waypoints."); return; }
-            const res = await fetch('/api/mission-planner/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ waypoints: dynamicWaypoints })
-            });
-            const r = await res.json();
-            alert(r.message);
-        }
-
-        async function loadSavedMission() {
-            const res = await fetch('/api/mission-planner/load');
-            const r = await res.json();
-            if (r.status === "SUCCESS") {
-                clearMissionPath();
-                dynamicWaypoints = r.waypoints;
-                
-                dynamicWaypoints.forEach((wp, index) => {
-                    const marker = L.circleMarker([wp.lat, wp.lon], { radius: 6, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.9 }).addTo(map)
-                     .bindPopup(`<b>${wp.name || 'WP Cargado'}</b><br>Lat: ${wp.lat.toFixed(4)}<br>Lon: ${wp.lon.toFixed(4)}`);
-                    waypointMarkers.push(marker);
-                });
-
-                renderWaypointsTable();
-                alert(`Misión cargada (${dynamicWaypoints.length} waypoints).`);
-            } else {
-                alert("No hay misiones guardadas.");
-            }
-        }
-
-        async function queryAICopilot() {
-            const promptInput = document.getElementById("ai-prompt-input");
-            const chatBox = document.getElementById("ai-chat-response");
-            const text = promptInput.value;
-            if(!text) return;
-
-            chatBox.innerHTML += `<br><b>Tú:</b> ${text}`;
-            promptInput.value = "";
-
-            try {
-                const res = await fetch('/api/ai/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: text })
-                });
-                const data = await res.json();
-                chatBox.innerHTML += `<br><b>AI:</b> ${data.response}`;
-                chatBox.scrollTop = chatBox.scrollHeight;
-            } catch (err) {
-                chatBox.innerHTML += `<br><b>AI:</b> Error de conexión con el copiloto.`;
-            }
-        }
-
-        function logConsole(text) {
-            const consoleBox = document.getElementById('mcc-console');
-            if (consoleBox) {
-                const timeStr = new Date().toLocaleTimeString();
-                consoleBox.innerHTML += `<br>[${timeStr}] ${text}`;
-                consoleBox.scrollTop = consoleBox.scrollHeight;
-            }
-        }
-    </script>
+    <script src="/static/js/map_module.js"></script>
+    <script src="/static/js/gcs_main.js"></script>
 </body>
 </html>

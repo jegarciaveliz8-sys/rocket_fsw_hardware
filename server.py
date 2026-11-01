@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import hmac
 import math
+import uvicorn
 
 from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner
 
@@ -14,7 +15,7 @@ app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 web_dir = os.path.join(BASE_DIR, "web")
 if os.path.exists(web_dir):
-    app.mount("/web", StaticFiles(directory=web_dir), name="web")
+    app.mount("/static", StaticFiles(directory=web_dir), name="static")
 
 app.include_router(mission_api.router)
 app.include_router(subsystems_api.router)
@@ -55,26 +56,29 @@ async def websocket_telemetry(websocket: WebSocket):
             t += 1
             mission_api.fsw_state["time"] = t
 
+            status_text = "STANDBY / READY"
             if mission_path.navigator.is_active:
-                lat, lon, alt, seq_status = mission_path.navigator.get_next_position(
-                    mission_api.fsw_state["lat"],
-                    mission_api.fsw_state["lon"],
-                    mission_api.fsw_state["altitude"]
-                )
-                mission_api.fsw_state["lat"] = lat
-                mission_api.fsw_state["lon"] = lon
-                mission_api.fsw_state["altitude"] = round(alt, 1)
-                mission_api.fsw_state["velocity"] = 12.5  
-                status_text = seq_status
-            else:
-                status_text = "STANDBY / READY"
+                current_state = {
+                    "lat": mission_api.fsw_state["lat"],
+                    "lon": mission_api.fsw_state["lon"],
+                    "altitude": mission_api.fsw_state["altitude"],
+                    "velocity": mission_api.fsw_state["velocity"],
+                    "status": "MISSION ACTIVE"
+                }
+                updated_state = mission_path.navigator.update_position(current_state)
+                
+                mission_api.fsw_state["lat"] = updated_state["lat"]
+                mission_api.fsw_state["lon"] = updated_state["lon"]
+                mission_api.fsw_state["altitude"] = round(updated_state["altitude"], 1)
+                mission_api.fsw_state["velocity"] = updated_state.get("velocity", 12.5)
+                status_text = updated_state.get("status", "MISSION ACTIVE")
 
             current_alt = mission_api.fsw_state["altitude"]
             current_vel = mission_api.fsw_state["velocity"]
             current_lat = mission_api.fsw_state["lat"]
             current_lon = mission_api.fsw_state["lon"]
             
-            sim_battery = max(15.0, 100.0 - (t * 0.05)) 
+            sim_battery = max(15.0, 100.0 - (t * 0.05))  
             sim_pressure = 15.4 + (0.5 if t % 10 == 0 else 0.0)
             sim_blackout_text = "SOURCE: ACTIVE_MONITORING"
 
@@ -127,3 +131,6 @@ async def websocket_telemetry(websocket: WebSocket):
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

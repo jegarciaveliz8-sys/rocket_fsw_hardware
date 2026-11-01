@@ -5,9 +5,9 @@ import os
 import asyncio
 import hashlib
 import hmac
+import math
 
-# Importación de routers existentes y el nuevo módulo de inyección de fallas
-from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection
+from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner
 
 app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
 
@@ -16,13 +16,23 @@ web_dir = os.path.join(BASE_DIR, "web")
 if os.path.exists(web_dir):
     app.mount("/web", StaticFiles(directory=web_dir), name="web")
 
-# Registro de routers
 app.include_router(mission_api.router)
 app.include_router(subsystems_api.router)
 app.include_router(ai_copilot.router)
 app.include_router(dji_bridge.router)
 app.include_router(commands_api.router)
-app.include_router(fault_injection.router) # <- Router de Inyección de Fallas integrado
+app.include_router(fault_injection.router)
+app.include_router(mission_planner.router)
+
+BASE_LAT, BASE_LON = 14.7883, -90.1988
+
+def calculate_distance(lat1, lon1, lat2, lon2):
+    R = 6371000  
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2) * math.sin(dlambda/2)**2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 @app.get("/")
 def read_root():
@@ -45,7 +55,6 @@ async def websocket_telemetry(websocket: WebSocket):
             t += 1
             mission_api.fsw_state["time"] = t
 
-            # Si la misión está activa, calcular posición en ruta de waypoints
             if mission_path.navigator.is_active:
                 lat, lon, alt, seq_status = mission_path.navigator.get_next_position(
                     mission_api.fsw_state["lat"],
@@ -55,29 +64,32 @@ async def websocket_telemetry(websocket: WebSocket):
                 mission_api.fsw_state["lat"] = lat
                 mission_api.fsw_state["lon"] = lon
                 mission_api.fsw_state["altitude"] = round(alt, 1)
-                mission_api.fsw_state["velocity"] = 12.5  # Velocidad de crucero simulada
+                mission_api.fsw_state["velocity"] = 12.5  
                 status_text = seq_status
             else:
                 status_text = "STANDBY / READY"
 
             current_alt = mission_api.fsw_state["altitude"]
             current_vel = mission_api.fsw_state["velocity"]
+            current_lat = mission_api.fsw_state["lat"]
+            current_lon = mission_api.fsw_state["lon"]
             
             sim_battery = max(15.0, 100.0 - (t * 0.05)) 
             sim_pressure = 15.4 + (0.5 if t % 10 == 0 else 0.0)
             sim_blackout_text = "SOURCE: ACTIVE_MONITORING"
 
-            # --- LÓGICA DE INYECCIÓN DE FALLAS ---
-            # Si se activa desde el panel de fallas, modificamos los valores en tiempo real
+            distance_from_base = calculate_distance(BASE_LAT, BASE_LON, current_lat, current_lon)
+            if distance_from_base > 500.0:
+                status_text = "🚨 GEOFENCE BREACHED: RTL ACTIVADO"
+
             if fault_injection.fault_state["low_battery_spike"]:
-                sim_battery = 12.5  # Forzar nivel de batería crítico
+                sim_battery = 12.5  
             
             if fault_injection.fault_state["rf_blackout"]:
                 sim_blackout_text = "⚠️ WARNING: RF LINK LOST (BLACKOUT)"
 
             if fault_injection.fault_state["gps_failure"]:
                 status_text = "⚠️ ERROR: 3D GPS FIX LOST"
-            # -------------------------------------
 
             payload_bytes = f"ALT:{current_alt}|VEL:{current_vel}|PC:{sim_pressure}|BAT:{sim_battery}|T:{t}".encode('utf-8')
             crc = hmac.new(b"ODYSSEY_HIL_KEY", payload_bytes, hashlib.sha256).hexdigest()[:4].upper()
@@ -93,8 +105,8 @@ async def websocket_telemetry(websocket: WebSocket):
                 "payload": "active",
                 "failover": "ready",
                 "status": status_text,
-                "lat": mission_api.fsw_state["lat"],
-                "lon": mission_api.fsw_state["lon"],
+                "lat": current_lat,
+                "lon": current_lon,
                 "pitch": 2.5 if mission_path.navigator.is_active else 0.0,
                 "yaw": 45.0 if mission_path.navigator.is_active else 0.0,
                 "roll": 1.0 if mission_path.navigator.is_active else 0.0,
@@ -103,7 +115,8 @@ async def websocket_telemetry(websocket: WebSocket):
                 "clock_drift_ms": 0.15,
                 "ccsds_frame": f"01AF0008{payload_bytes.hex().upper()[:20]}...{crc}",
                 "dsn_station": "Sanarate Ground Station [HIL / RF Link]",
-                "blackout_status": sim_blackout_text
+                "blackout_status": sim_blackout_text,
+                "distance_from_base_m": round(distance_from_base, 1)
             }
 
             blackbox.log_telemetry_packet(telemetry_packet)

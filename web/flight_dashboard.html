@@ -2,195 +2,402 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 GCS - Mission Control Center</title>
-    <link rel="stylesheet" href="/web/css/mcc_styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>ODYSSEY-1 GCS - Mission Control Center [Sanarate HIL]</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { background-color: #0b0f19; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 15px; box-sizing: border-box; }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 15px; }
-        h1 { color: #34d399; margin: 0; font-size: 1.3rem; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0d1117; color: #c9d1d9; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 15px; align-items: start; }
-        @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        header { background: #161b22; border-bottom: 1px solid #30363d; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; height: 55px; }
+        header h1 { font-size: 16px; color: #58a6ff; display: flex; align-items: center; gap: 10px; }
+        .badge { background: #238636; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .met-timer { background: #21262d; border: 1px solid #30363d; padding: 4px 12px; border-radius: 6px; font-family: monospace; font-size: 14px; color: #f0f6fc; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 15px; }
-        .card { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; }
-        .card h3 { margin-top: 0; color: #8b949e; font-size: 0.65rem; text-transform: uppercase; }
-        .value { font-size: 1.1rem; font-weight: bold; color: #34d399; }
+        /* Layout de 3 columnas */
+        .workspace { display: grid; grid-template-columns: 280px 1fr 340px; grid-template-rows: 1fr 140px; flex: 1; gap: 8px; padding: 8px; overflow: hidden; }
         
-        /* Batería y Progreso */
-        .battery-container { margin-top: 6px; background: #050811; border: 1px solid #21262d; border-radius: 4px; height: 8px; overflow: hidden; position: relative; }
-        .battery-fill { background: #34d399; height: 100%; width: 100%; transition: width 0.5s ease, background-color 0.5s ease; }
+        .col-left { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+        .col-center { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 8px; position: relative; border-radius: 6px; overflow: hidden; border: 1px solid #30363d; }
+        .col-right { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+        
+        .panel { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .panel h3 { font-size: 11px; text-transform: uppercase; color: #8b949e; border-bottom: 1px solid #30363d; padding-bottom: 4px; letter-spacing: 0.5px; }
+        
+        /* Mapa */
+        #map { width: 100%; height: 100%; flex: 1; z-index: 1; }
+        .map-controls { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(22,27,34,0.9); padding: 4px; border-radius: 6px; border: 1px solid #30363d; display: flex; gap: 4px; }
+        .map-controls button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 10px; }
+        .map-controls button:hover { background: #30363d; color: #58a6ff; }
 
-        .console-box { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 100px; overflow-y: auto; font-size: 0.75rem; margin-bottom: 15px; }
-        .chart-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 180px; position: relative; margin-bottom: 15px; }
-        .map-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 300px; margin-bottom: 15px; position: relative; }
-        #map { width: 100%; height: 230px; border-radius: 4px; background: #050811; }
-        .gps-overlay { display: flex; justify-content: space-between; font-size: 0.7rem; color: #38bdf8; margin-bottom: 6px; font-weight: bold; }
-        .map-controls-bar { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-        .map-btn { background: #21262d; color: #38bdf8; border: 1px solid #30363d; padding: 3px 8px; font-size: 0.65rem; border-radius: 3px; cursor: pointer; font-family: monospace; }
-        .map-btn:hover { background: #30363d; color: #34d399; }
-        
-        .btn-controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
-        button { background: #1f6feb; color: white; border: none; padding: 6px 14px; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
-        button:hover { background: #388bfd; }
-        .btn-fts { background: #da3633; }
-        .btn-fts:hover { background: #f85149; }
-        
-        .met-clock { font-size: 0.9rem; font-weight: bold; color: #facc15; background: #050811; padding: 6px 12px; border: 1px solid #21262d; border-radius: 4px; }
-        
-        .side-panel { display: flex; flex-direction: column; gap: 15px; }
-        .code-inspector { background: #050811; border: 1px solid #21262d; padding: 8px; border-radius: 6px; font-size: 0.68rem; color: #38bdf8; word-break: break-all; }
-        
-        /* Canvas Horizonte Artificial */
-        #attitudeCanvas { width: 100%; height: 130px; background: #050811; border-radius: 4px; border: 1px solid #21262d; display: block; }
-        
-        /* Lista de Waypoints */
-        .wp-list { max-height: 110px; overflow-y: auto; font-size: 0.7rem; background: #050811; border: 1px solid #21262d; padding: 6px; border-radius: 4px; }
-        .wp-item { display: flex; justify-content: space-between; border-bottom: 1px solid #161b22; padding: 3px 0; color: #8b949e; }
-        .wp-item.active { color: #34d399; font-weight: bold; }
+        /* Consola inferior */
+        #console-container { grid-column: 1 / 4; grid-row: 2; background: #090d11; border: 1px solid #30363d; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; }
+        #mcc-console { flex: 1; font-family: monospace; font-size: 11px; color: #34d399; overflow-y: auto; white-space: pre-wrap; line-height: 1.3; }
 
-        .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 210px; }
-        .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 6px; background: #050811; border-radius: 4px; display: flex; flex-direction: column; gap: 6px; line-height: 1.2; }
-        .ai-input-group { display: flex; gap: 6px; }
-        .ai-input-group input { flex-grow: 1; background: #0b0f19; border: 1px solid #21262d; color: white; padding: 5px; border-radius: 4px; font-family: monospace; font-size: 0.75rem; }
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .metric-card { background: #21262d; padding: 6px; border-radius: 4px; text-align: center; border: 1px solid #30363d; }
+        .metric-card span { display: block; font-size: 9px; color: #8b949e; }
+        .metric-card strong { font-size: 14px; color: #f0f6fc; font-family: monospace; }
+
+        .btn-action { background: #238636; color: white; border: none; padding: 7px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; text-align: center; font-size: 11px; }
+        .btn-action:hover { background: #2ea043; }
+        .btn-danger { background: #da3633; }
+        .btn-danger:hover { background: #f85149; }
+
+        .chat-box { background: #090d11; border: 1px solid #30363d; border-radius: 4px; padding: 6px; font-size: 11px; overflow-y: auto; height: 65px; line-height: 1.3; }
+        .chat-input { display: flex; gap: 4px; margin-top: 4px; }
+        .chat-input input { flex: 1; background: #21262d; border: 1px solid #30363d; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px; outline: none; }
+        .subsystem-box { font-size: 11px; display: flex; flex-direction: column; gap: 4px; background: #21262d; padding: 6px; border-radius: 4px; border: 1px solid #30363d; }
+
+        /* Estilo para la tabla de Waypoints */
+        .wp-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+        .wp-table th { background: #21262d; color: #8b949e; padding: 4px; text-align: left; border-bottom: 1px solid #30363d; }
+        .wp-table td { padding: 4px; border-bottom: 1px solid #21262d; }
+        .wp-table input[type="number"] { width: 50px; background: #090d11; border: 1px solid #30363d; color: #fff; padding: 2px 4px; border-radius: 3px; font-size: 11px; }
     </style>
 </head>
 <body>
+
     <header>
-        <h1>🚀 ODYSSEY-1 GCS - Mission Control Center</h1>
-        <div>
-            <span id="ws-status" style="color: #f87171; font-weight: bold;">CONNECTED (RTOS KERNEL)</span>
+        <h1>🚀 ODYSSEY-1 GCS <span>[Sanarate HIL]</span></h1>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="met-timer" id="lbl-met">MET: T+00:00</div>
+            <div class="badge" id="lbl-status">STANDBY / READY</div>
         </div>
     </header>
 
-    <div class="btn-controls">
-        <button onclick="sendCommand('LAUNCH')">▶ INICIAR LANZAMIENTO</button>
-        <button class="btn-fts" onclick="triggerFTS()">🚨 FTS (ABORT)</button>
-        <div class="met-clock">MET: <span id="met-timer">T+00:00</span></div>
-    </div>
-
-    <div class="dashboard-grid">
-        <div>
-            <div class="grid">
-                <div class="card"><h3>Altitud</h3><div id="metric-alt" class="value">5 m</div></div>
-                <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="value">12.5 m/s</div></div>
-                <div class="card"><h3>Presión Cámara (Pc)</h3><div id="metric-pc" class="value" style="color: #38bdf8;">15.4 MPa</div></div>
-                <div class="card">
-                    <h3>Batería LiPo</h3>
-                    <div id="metric-battery" class="value" style="font-size: 0.95rem; color: #34d399;">100.0%</div>
-                    <div class="battery-container"><div id="battery-fill" class="battery-fill"></div></div>
-                </div>
-                <div class="card"><h3>Secuencia FSW</h3><div id="fsw-sequence" class="value" style="font-size: 0.75rem; color: #facc15;">STANDBY</div></div>
-                <div class="card"><h3>Estado DSN</h3><div id="metric-dsn" class="value" style="font-size: 0.75rem; color: #94a3b8;">Sanarate GCS</div></div>
-            </div>
-
-            <div class="chart-container"><canvas id="telemetryChart"></canvas></div>
-
-            <div class="map-container">
-                <div class="gps-overlay">
-                    <span>📡 GOOGLE ADVANCED GIS & SANARATE RADAR</span>
-                    <span>LAT: <span id="gps-lat" style="color:#34d399;">14.7883°</span> | LON: <span id="gps-lon" style="color:#34d399;">-90.1988°</span></span>
-                </div>
-                <div class="map-controls-bar">
-                    <button class="map-btn" onclick="setLayer('roadmap')">🗺️ Calles</button>
-                    <button class="map-btn" onclick="setLayer('satellite')">🛰️ Satélite</button>
-                    <button class="map-btn" onclick="setLayer('hybrid')">🌐 Híbrido</button>
-                    <button class="map-btn" onclick="locateUser()" style="background: #1f6feb; color: white;">📍 Centrar Base</button>
-                </div>
-                <div id="map"></div>
-            </div>
-
-            <h3>Consola de Misión (RTOS / CCSDS)</h3>
-            <div id="mcc-console" class="console-box">
-                [T+0s] Sistema inicializado.<br>[INFO] Arquitectura modular de subsistemas cargada.
-            </div>
-        </div>
-
-        <div class="side-panel">
-            <div class="card">
-                <h3>Horizonte Artificial (PFD)</h3>
-                <canvas id="attitudeCanvas"></canvas>
-                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 4px; color: #8b949e;">
-                    <span>Pitch: <span id="val-pitch" style="color: #34d399;">0°</span></span>
-                    <span>Roll: <span id="val-roll" style="color: #facc15;">0°</span></span>
-                    <span>Yaw: <span id="val-yaw" style="color: #38bdf8;">0°</span></span>
+    <div class="workspace">
+        
+        <!-- COLUMNA IZQUIERDA -->
+        <div class="col-left">
+            <div class="panel">
+                <h3>Telemetría Principal</h3>
+                <div class="telemetry-grid">
+                    <div class="metric-card"><span>ALTITUD</span><strong id="val-alt">0.0 m</strong></div>
+                    <div class="metric-card"><span>VELOCIDAD</span><strong id="val-vel">0.0 m/s</strong></div>
+                    <div class="metric-card"><span>PRESIÓN</span><strong id="val-pc">15.4 MPa</strong></div>
+                    <div class="metric-card"><span>BATERÍA</span><strong id="val-bat">100 %</strong></div>
                 </div>
             </div>
 
-            <!-- Nuevo Panel de Inyección de Fallas integrado -->
-            <div class="card">
-                <h3>Simulador de Fallas (Fault Injection)</h3>
-                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; margin-top: 6px;">
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Pérdida RF (Blackout)</span>
-                        <input type="checkbox" onchange="toggleFault('rf_blackout', this.checked)">
-                    </label>
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Falla de GPS (No Fix)</span>
-                        <input type="checkbox" onchange="toggleFault('gps_failure', this.checked)">
-                    </label>
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Batería Crítica (LiPo Drop)</span>
-                        <input type="checkbox" onchange="toggleFault('low_battery_spike', this.checked)">
-                    </label>
+            <div class="panel">
+                <h3>Control de Misión</h3>
+                <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
+                <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
+            </div>
+
+            <div class="panel">
+                <h3>Simulador de Fallas</h3>
+                <div class="subsystem-box">
+                    <label style="cursor:pointer;"><input type="checkbox" id="chk-batt" onchange="toggleFault('low_battery_spike', this)"> Batería Crítica (LiPo)</label>
+                    <label style="cursor:pointer;"><input type="checkbox" id="chk-rf" onchange="toggleFault('rf_blackout', this)"> Pérdida RF (Blackout)</label>
+                    <label style="cursor:pointer;"><input type="checkbox" id="chk-gps" onchange="toggleFault('gps_failure', this)"> Falla de GPS (No Fix)</label>
                 </div>
             </div>
 
-            <div class="card">
-                <h3>Ruta Autónoma (Waypoints)</h3>
-                <div id="wp-list-container" class="wp-list">
-                    <div class="wp-item"><span>WP0: Base Sanarate</span><span>25m</span></div>
-                    <div class="wp-item"><span>WP1: Norte Zona Alta</span><span>40m</span></div>
-                    <div class="wp-item"><span>WP2: Desplazamiento Oeste</span><span>50m</span></div>
-                    <div class="wp-item"><span>WP3: Giro Sur Perímetro</span><span>45m</span></div>
-                    <div class="wp-item"><span>WP4: Aproximación Base</span><span>30m</span></div>
-                    <div class="wp-item"><span>WP5: RTL / Aterrizaje</span><span>5m</span></div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>Inspector CCSDS Crudo</h3>
-                <p id="raw-ccsds" class="code-inspector" style="margin:0;">FRAME: 01AF...<br>CRC: VALID | Drifts: 0.15ms</p>
-            </div>
-
-            <div class="ai-chat">
-                <h3>Copiloto AI (Gemini FSW)</h3>
-                <div id="ai-messages" class="ai-messages">
-                    <div style="color: #8b949e;">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</div>
-                </div>
-                <div class="ai-input-group">
-                    <input type="text" id="ai-input" placeholder="Pregúntale al FSW..." onkeypress="handleAIPress(event)">
-                    <button onclick="askAI()">Enviar</button>
+            <div class="panel">
+                <h3>Subsistemas</h3>
+                <div class="subsystem-box">
+                    <span>Aviónica: <strong style="color:#34d399">NOMINAL</strong></span>
+                    <span>Propulsión: <strong style="color:#38bdf8">ARMED</strong></span>
+                    <span>DSN: <strong style="color:#34d399">Sanarate [HIL]</strong></span>
                 </div>
             </div>
         </div>
+
+        <!-- COLUMNA CENTRAL: Mapa -->
+        <div class="col-center">
+            <div class="map-controls">
+                <button onclick="setLayer('roadmap')">Mapa</button>
+                <button onclick="setLayer('satellite')">Satélite</button>
+                <button onclick="setLayer('hybrid')">Híbrido</button>
+                <button onclick="locateUser()">Sanarate</button>
+            </div>
+            <div id="map"></div>
+        </div>
+
+        <!-- COLUMNA DERECHA: Gestor de Waypoints Operativo -->
+        <div class="col-right">
+            <div class="panel">
+                <h3>Gestor de Waypoints (Sanarate)</h3>
+                <div style="display: flex; gap: 4px;">
+                    <button onclick="saveCurrentMission()" style="flex:1; background:#34d399; color:#0d1117; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">💾 Guardar</button>
+                    <button onclick="loadSavedMission()" style="flex:1; background:#38bdf8; color:#0d1117; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">📂 Cargar</button>
+                    <button onclick="clearMissionPath()" style="flex:1; background:#ef4444; color:#fff; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">🗑️ Limpiar</button>
+                </div>
+                <div style="max-height: 140px; overflow-y: auto; background: #090d11; border: 1px solid #30363d; border-radius: 4px;">
+                    <table class="wp-table" id="wp-table-element">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Lat/Lon</th>
+                                <th>Alt(m)</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="waypoints-table-body">
+                            <tr><td colspan="4" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Horizonte (PFD)</h3>
+                <div class="subsystem-box" style="flex-direction: row; justify-content: space-around;">
+                    <span>Pitch: <strong id="val-pitch" style="font-family:monospace;">0°</strong></span>
+                    <span>Roll: <strong id="val-roll" style="font-family:monospace;">0°</strong></span>
+                    <span>Yaw: <strong id="val-yaw" style="font-family:monospace;">0°</strong></span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Inspector CCSDS</h3>
+                <div id="val-ccsds" style="font-family: monospace; font-size: 9px; color: #34d399; background: #090d11; padding: 4px; border-radius: 4px; border: 1px solid #30363d; word-break: break-all;">
+                    Esperando trama...
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Copiloto AI (Gemini)</h3>
+                <div class="chat-box" id="ai-chat-response">
+                    [AI] Copiloto conectado. Listo para diagnósticos.
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="ai-prompt-input" placeholder="Pregúntale al FSW..." onkeypress="if(event.key === 'Enter') queryAICopilot()">
+                    <button onclick="queryAICopilot()" style="background:#38bdf8; color:#0d1117; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">Enviar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONSOLA INFERIOR -->
+        <div id="console-container">
+            <h3>Consola de Misión (RTOS / CCSDS / Alertas)</h3>
+            <div id="mcc-console">[T+0s] Sistema inicializado en Sanarate [HIL]. Arquitectura modular cargada.</div>
+        </div>
+
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/web/js/map_module.js"></script>
-    <script src="/web/js/chart_module.js"></script>
-    <script src="/web/js/attitude_module.js"></script>
-    <script src="/web/js/ai_chat_module.js"></script>
-    <script src="/web/js/telemetry_ws.js"></script>
     <script>
-        async function toggleFault(faultType, isActive) {
+        const map = L.map('map', { maxZoom: 20 }).setView([14.7883, -90.1988], 15);
+        const layers = {
+            roadmap: L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }),
+            satellite: L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] }),
+            hybrid: L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] })
+        };
+        let activeLayer = layers.hybrid.addTo(map);
+
+        function setLayer(name) {
+            if (layers[name]) {
+                map.removeLayer(activeLayer);
+                activeLayer = layers[name].addTo(map);
+            }
+        }
+        function locateUser() { map.setView([14.7883, -90.1988], 16); }
+
+        const droneIcon = L.divIcon({
+            className: 'custom-drone',
+            html: '<div style="width:16px; height:16px; background:#ef4444; border:2px solid #fff; border-radius:50%; box-shadow:0 0 10px #ef4444;"></div>',
+            iconSize: [16, 16], iconAnchor: [8, 8]
+        });
+        const droneMarker = L.marker([14.7883, -90.1988], { icon: droneIcon }).addTo(map).bindPopup("<b>ODYSSEY-1 Sanarate Base</b>");
+        const trajectoryPath = L.polyline([], { color: '#38bdf8', weight: 4, opacity: 0.85 }).addTo(map);
+
+        let dynamicWaypoints = [];
+        let waypointMarkers = [];
+
+        map.on('click', async function(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            const wpData = { lat: lat, lon: lon, alt: 35.0, name: `WP Sanarate #${dynamicWaypoints.length + 1}` };
+            
+            dynamicWaypoints.push(wpData);
+            
+            const marker = L.circleMarker([lat, lon], { radius: 6, color: '#facc15', fillColor: '#facc15', fillOpacity: 0.9 }).addTo(map)
+             .bindPopup(`<b>${wpData.name}</b><br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}`);
+            waypointMarkers.push(marker);
+
+            renderWaypointsTable();
+            logConsole(`[MAPA] Waypoint añadido: ${wpData.name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
+        });
+
+        function renderWaypointsTable() {
+            const tbody = document.getElementById("waypoints-table-body");
+            if (!tbody) return;
+            
+            if (dynamicWaypoints.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            dynamicWaypoints.forEach((wp, i) => {
+                html += `
+                    <tr>
+                        <td><b>WP${i}</b></td>
+                        <td style="font-family:monospace; font-size:10px;">${wp.lat.toFixed(3)},<br>${wp.lon.toFixed(3)}</td>
+                        <td><input type="number" value="${wp.alt}" onchange="updateWaypointAlt(${i}, this.value)"></td>
+                        <td><button onclick="removeWaypoint(${i})" style="background:#da3633; color:#fff; border:none; padding:2px 6px; border-radius:3px; cursor:pointer;">X</button></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function updateWaypointAlt(index, newAlt) {
+            if (dynamicWaypoints[index]) {
+                dynamicWaypoints[index].alt = parseFloat(newAlt) || 0.0;
+                logConsole(`[PLANIFICADOR] WP${index} altitud actualizada a ${newAlt}m`);
+            }
+        }
+
+        function removeWaypoint(index) {
+            if (waypointMarkers[index]) {
+                map.removeLayer(waypointMarkers[index]);
+                waypointMarkers.splice(index, 1);
+            }
+            dynamicWaypoints.splice(index, 1);
+            renderWaypointsTable();
+            logConsole(`[PLANIFICADOR] Waypoint #${index} eliminado.`);
+        }
+
+        function clearMissionPath() {
+            waypointMarkers.forEach(marker => map.removeLayer(marker));
+            waypointMarkers = [];
+            dynamicWaypoints = [];
+            renderWaypointsTable();
+            logConsole("[MAPA] Todos los waypoints fueron limpiados.");
+        }
+
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
+
+        ws.onmessage = function(event) {
+            const pkt = JSON.parse(event.data);
+            
+            document.getElementById("val-alt").innerText = pkt.altitude + " m";
+            document.getElementById("val-vel").innerText = pkt.velocity + " m/s";
+            document.getElementById("val-pc").innerText = pkt.chamber_pressure + " MPa";
+            document.getElementById("val-bat").innerText = pkt.battery_pct + " %";
+            document.getElementById("lbl-status").innerText = pkt.status;
+            document.getElementById("lbl-met").innerText = `MET: T+${String(Math.floor(pkt.time/60)).padStart(2,'0')}:${String(pkt.time%60).padStart(2,'0')}`;
+            
+            document.getElementById("val-pitch").innerText = (pkt.pitch || 0) + "°";
+            document.getElementById("val-roll").innerText = (pkt.roll || 0) + "°";
+            document.getElementById("val-yaw").innerText = (pkt.yaw || 0) + "°";
+            document.getElementById("val-ccsds").innerText = pkt.ccsds_frame;
+
+            let currentLat = pkt.lat;
+            let currentLon = pkt.lon;
+
+            if (!currentLat || !currentLon) {
+                const timeOffset = (pkt.time || 0) * 0.0008;
+                currentLat = 14.7883 + Math.sin(timeOffset) * 0.0035;
+                currentLon = -90.1988 + Math.cos(timeOffset) * 0.0035;
+            }
+
+            const pos = [currentLat, currentLon];
+            droneMarker.setLatLng(pos);
+            trajectoryPath.addLatLng(pos);
+
+            if (pkt.alerts && pkt.alerts.length > 0) {
+                pkt.alerts.forEach(alert => {
+                    logConsole(`[ALERTA FSW] ${alert}`);
+                });
+            }
+        };
+
+        // --- FUNCIÓN ACTUALIZADA PARA ENVIAR LOS WAYPOINTS AUTOMÁTICAMENTE ---
+        async function startMission() {
+            if (dynamicWaypoints.length === 0) {
+                alert("Haz clic en el mapa para trazar al menos un waypoint antes de iniciar.");
+                return;
+            }
+
+            await fetch('/api/mission/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ waypoints: dynamicWaypoints })
+            });
+
+            logConsole(`[COMANDO] Misión iniciada con ${dynamicWaypoints.length} waypoints de ruta.`);
+        }
+
+        async function abortMission() {
+            await fetch('/api/mission/abort', { method: 'POST' });
+            logConsole("[COMANDO] Misión abortada / RTL forzado.");
+        }
+
+        async function toggleFault(faultName, checkbox) {
+            await fetch('/api/fault/inject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fault: faultName, active: checkbox.checked })
+            });
+            logConsole(`[INYECCIÓN] ${faultName} -> ${checkbox.checked ? 'ACTIVADO' : 'DESACTIVADO'}`);
+        }
+
+        async function saveCurrentMission() {
+            if (dynamicWaypoints.length === 0) { alert("No hay waypoints."); return; }
+            const res = await fetch('/api/mission-planner/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ waypoints: dynamicWaypoints })
+            });
+            const r = await res.json();
+            alert(r.message);
+        }
+
+        async function loadSavedMission() {
+            const res = await fetch('/api/mission-planner/load');
+            const r = await res.json();
+            if (r.status === "SUCCESS") {
+                clearMissionPath();
+                dynamicWaypoints = r.waypoints;
+                
+                dynamicWaypoints.forEach((wp, index) => {
+                    const marker = L.circleMarker([wp.lat, wp.lon], { radius: 6, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.9 }).addTo(map)
+                     .bindPopup(`<b>${wp.name || 'WP Cargado'}</b><br>Lat: ${wp.lat.toFixed(4)}<br>Lon: ${wp.lon.toFixed(4)}`);
+                    waypointMarkers.push(marker);
+                });
+
+                renderWaypointsTable();
+                alert(`Misión cargada (${dynamicWaypoints.length} waypoints).`);
+            } else {
+                alert("No hay misiones guardadas.");
+            }
+        }
+
+        async function queryAICopilot() {
+            const promptInput = document.getElementById("ai-prompt-input");
+            const chatBox = document.getElementById("ai-chat-response");
+            const text = promptInput.value;
+            if(!text) return;
+
+            chatBox.innerHTML += `<br><b>Tú:</b> ${text}`;
+            promptInput.value = "";
+
             try {
-                const response = await fetch('/api/faults/toggle', {
+                const res = await fetch('/api/ai/query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fault_type: faultType, active: isActive })
+                    body: JSON.stringify({ prompt: text })
                 });
-                const result = await response.json();
-                const consoleBox = document.getElementById('mcc-console');
-                if (consoleBox) {
-                    const timeStr = new Date().toLocaleTimeString();
-                    consoleBox.innerHTML += `<br><span style="color: #f87171;">[${timeStr}] [INYECCIÓN DE FALLA] ${result.fault} -> ${result.active ? 'ACTIVADO' : 'APAGADO'}</span>`;
-                    consoleBox.scrollTop = consoleBox.scrollHeight;
-                }
+                const data = await res.json();
+                chatBox.innerHTML += `<br><b>AI:</b> ${data.response}`;
+                chatBox.scrollTop = chatBox.scrollHeight;
             } catch (err) {
-                console.error("Error al enviar comando de falla", err);
+                chatBox.innerHTML += `<br><b>AI:</b> Error de conexión con el copiloto.`;
+            }
+        }
+
+        function logConsole(text) {
+            const consoleBox = document.getElementById('mcc-console');
+            if (consoleBox) {
+                const timeStr = new Date().toLocaleTimeString();
+                consoleBox.innerHTML += `<br>[${timeStr}] ${text}`;
+                consoleBox.scrollTop = consoleBox.scrollHeight;
             }
         }
     </script>

@@ -1,6 +1,5 @@
 // --- MÓDULO GIS AVANZADO & GEOLOCALIZACIÓN (ODYSSEY-1 Sanarate) ---
 
-// Inicializar centrado directamente en Sanarate, Guatemala (14.7883, -90.1988)
 const map = L.map('map', { maxZoom: 20, fullscreenControl: true }).setView([14.7883, -90.1988], 15);
 
 // Capas de Google Maps configurables
@@ -19,7 +18,7 @@ function setLayer(layerName) {
     }
 }
 
-// Marcador del Vehículo (Cohete / Dron F450) en Sanarate
+// Marcador del Vehículo (Dron F450) en Sanarate
 const rocketIcon = L.divIcon({
     className: 'custom-radar-marker',
     html: '<div style="width:16px; height:16px; background:#ef4444; border:2px solid #ffffff; border-radius:50%; box-shadow: 0 0 14px #ef4444;"></div>',
@@ -31,6 +30,7 @@ const trajectoryPath = L.polyline([], { color: '#38bdf8', weight: 4, opacity: 0.
 
 let userMarker = null;
 let userCircle = null;
+let dynamicWaypoints = [];
 
 function locateUser() {
     if (!navigator.geolocation) {
@@ -49,9 +49,7 @@ function locateUser() {
         },
         (error) => {
             console.warn("Error de geolocalización por hardware:", error.message);
-            const fallbackLat = 14.7883;
-            const fallbackLon = -90.1988;
-            updateUserPositionOnMap(fallbackLat, fallbackLon, 500, "Fallback Estación Sanarate");
+            updateUserPositionOnMap(14.7883, -90.1988, 500, "Fallback Estación Sanarate");
         },
         options
     );
@@ -70,26 +68,103 @@ function updateUserPositionOnMap(lat, lon, accuracy, sourceDesc) {
         userCircle.setLatLng([lat, lon]);
         userCircle.setRadius(accuracy);
     } else {
-        userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup(`<b>📍 Estación Terrena</b><br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}<br><small>(${sourceDesc})</small>`).openPopup();
+        userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup(`<b>📍 Estación Terrena</b><br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}`).openPopup();
         userCircle = L.circle([lat, lon], { radius: accuracy, color: '#34d399', fillColor: '#34d399', fillOpacity: 0.15 }).addTo(map);
     }
-
     map.setView([lat, lon], 14);
-    const consoleBox = document.getElementById("mcc-console");
-    if(consoleBox) {
-        consoleBox.innerHTML += `<br>[GPS] Estación terrena fijada en: ${lat.toFixed(4)}°, ${lon.toFixed(4)}° (${sourceDesc})`;
-        consoleBox.scrollTop = consoleBox.scrollHeight;
-    }
 }
 
-// Permitir clics en el mapa para ajustar posición manualmente
+// --- INTERACTIVIDAD: CLIC EN EL MAPA CREA UN WAYPOINT DINÁMICO ---
 map.on('click', function(e) {
     const lat = e.latlng.lat;
     const lon = e.latlng.lng;
-    updateUserPositionOnMap(lat, lon, 100, "Selección Manual en Mapa");
+    const wpData = { lat: lat, lon: lon, alt: 35.0, name: `WP Sanarate #${dynamicWaypoints.length + 1}` };
+    
+    dynamicWaypoints.push(wpData);
+    renderWaypointsList();
+
+    L.circleMarker([lat, lon], {
+        radius: 6,
+        color: '#facc15',
+        fillColor: '#facc15',
+        fillOpacity: 0.9
+    }).addTo(map).bindPopup(`<b>${wpData.name}</b><br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}`);
+
+    const consoleBox = document.getElementById("mcc-console");
+    if(consoleBox) {
+        consoleBox.innerHTML += `<br>[MAPA] Waypoint añadido: ${wpData.name} (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
 });
 
-// Función unificada para actualizar la posición en tiempo real desde el WebSocket
+function renderWaypointsList() {
+    const container = document.getElementById("waypoints-list-container");
+    if (!container) return;
+    
+    if (dynamicWaypoints.length === 0) {
+        container.innerHTML = "No hay waypoints dinámicos creados.";
+        return;
+    }
+
+    let html = "";
+    dynamicWaypoints.forEach((wp, index) => {
+        html += `<div><b>WP${index}:</b> ${wp.lat.toFixed(4)}, ${wp.lon.toFixed(4)} (${wp.alt}m)</div>`;
+    });
+    container.innerHTML = html;
+}
+
+async function saveCurrentMission() {
+    if (dynamicWaypoints.length === 0) {
+        alert("No hay waypoints para guardar.");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/mission-planner/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ waypoints: dynamicWaypoints })
+        });
+        const result = await response.json();
+        alert(result.message || "Misión guardada con éxito en el servidor.");
+    } catch (err) {
+        console.error("Error al guardar la misión", err);
+    }
+}
+
+async function loadSavedMission() {
+    try {
+        const response = await fetch('/api/mission-planner/load');
+        const result = await response.json();
+        
+        if (result.status === "SUCCESS" && result.waypoints) {
+            dynamicWaypoints = result.waypoints;
+            renderWaypointsList();
+            
+            dynamicWaypoints.forEach(wp => {
+                L.circleMarker([wp.lat, wp.lon], {
+                    radius: 6,
+                    color: '#38bdf8',
+                    fillColor: '#38bdf8',
+                    fillOpacity: 0.9
+                }).addTo(map);
+            });
+            alert(`Misión cargada correctamente (${dynamicWaypoints.length} waypoints).`);
+        } else {
+            alert(result.message || "No se encontró ninguna misión guardada.");
+        }
+    } catch (err) {
+        console.error("Error al cargar la misión", err);
+    }
+}
+
+function clearMissionPath() {
+    dynamicWaypoints = [];
+    renderWaypointsList();
+    alert("Lista de waypoints limpiada.");
+}
+
+// Función para actualizar la posición en tiempo real desde el WebSocket
 window.updateGPSPosition = function(lat, lon) {
     if (lat !== undefined && lon !== undefined) {
         const newPos = [lat, lon];
@@ -103,5 +178,4 @@ window.updateGPSPosition = function(lat, lon) {
     }
 };
 
-// Alias de compatibilidad por si se llama updateMapPosition en otra parte
 window.updateMapPosition = window.updateGPSPosition;

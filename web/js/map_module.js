@@ -1,5 +1,7 @@
-// --- MÓDULO GIS AVANZADO & GEOLOCALIZACIÓN (ODYSSEY-1) ---
-const map = L.map('map', { maxZoom: 20, fullscreenControl: true }).setView([28.5721, -80.6480], 16);
+// --- MÓDULO GIS AVANZADO & GEOLOCALIZACIÓN (ODYSSEY-1 Sanarate) ---
+
+// Inicializar centrado directamente en Sanarate, Guatemala (14.7883, -90.1988)
+const map = L.map('map', { maxZoom: 20, fullscreenControl: true }).setView([14.7883, -90.1988], 15);
 
 // Capas de Google Maps configurables
 const layers = {
@@ -17,14 +19,14 @@ function setLayer(layerName) {
     }
 }
 
-// Marcador del Cohete
+// Marcador del Vehículo (Cohete / Dron F450) en Sanarate
 const rocketIcon = L.divIcon({
     className: 'custom-radar-marker',
     html: '<div style="width:16px; height:16px; background:#ef4444; border:2px solid #ffffff; border-radius:50%; box-shadow: 0 0 14px #ef4444;"></div>',
     iconSize: [16, 16],
     iconAnchor: [8, 8]
 });
-const rocketMarker = L.marker([28.5721, -80.6480], { icon: rocketIcon }).addTo(map).bindPopup("<b>ODYSSEY-1 Vehicle</b>");
+const rocketMarker = L.marker([14.7883, -90.1988], { icon: rocketIcon }).addTo(map).bindPopup("<b>ODYSSEY-1 Vehicle (Sanarate Base)</b>");
 const trajectoryPath = L.polyline([], { color: '#38bdf8', weight: 4, opacity: 0.85 }).addTo(map);
 
 let userMarker = null;
@@ -36,28 +38,20 @@ function locateUser() {
         return;
     }
     
-    // Opciones estrictas para evitar triangulaciones erróneas por IP
-    const options = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-    };
+    const options = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
-
             updateUserPositionOnMap(lat, lon, accuracy, "Geolocalización GPS Directa");
         },
         (error) => {
             console.warn("Error de geolocalización por hardware:", error.message);
-            // Fallback inteligente a Sanarate, El Progreso si falla la red
-            const fallbackLat = 14.7797;
-            const fallbackLon = -90.1136;
-            updateUserPositionOnMap(fallbackLat, fallbackLon, 500, "Fallback Manual (Sanarate, El Progreso)");
-            alert("El navegador devolvió una ubicación errónea (Cobán). Se ha fijado la estación terrena en Sanarate, El Progreso. Haz clic en el mapa para ajustar si es necesario.");
+            const fallbackLat = 14.7883;
+            const fallbackLon = -90.1988;
+            updateUserPositionOnMap(fallbackLat, fallbackLon, 500, "Fallback Estación Sanarate");
         },
         options
     );
@@ -81,22 +75,33 @@ function updateUserPositionOnMap(lat, lon, accuracy, sourceDesc) {
     }
 
     map.setView([lat, lon], 14);
-    document.getElementById("mcc-console").innerHTML += `<br>[GPS] Estación terrena fijada en: ${lat.toFixed(4)}°, ${lon.toFixed(4)}° (${sourceDesc})`;
+    const consoleBox = document.getElementById("mcc-console");
+    if(consoleBox) {
+        consoleBox.innerHTML += `<br>[GPS] Estación terrena fijada en: ${lat.toFixed(4)}°, ${lon.toFixed(4)}° (${sourceDesc})`;
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
 }
 
-// Permite hacer clic en el mapa para corregir/fijar la ubicación manualmente si se desea
+// Permitir clics en el mapa para ajustar posición manualmente
 map.on('click', function(e) {
     const lat = e.latlng.lat;
     const lon = e.latlng.lng;
     updateUserPositionOnMap(lat, lon, 100, "Selección Manual en Mapa");
 });
 
+// Función unificada para actualizar la posición en tiempo real desde el WebSocket
 window.updateGPSPosition = function(lat, lon) {
     if (lat !== undefined && lon !== undefined) {
         const newPos = [lat, lon];
         rocketMarker.setLatLng(newPos);
         trajectoryPath.addLatLng(newPos);
-        document.getElementById("gps-lat").innerText = lat.toFixed(4) + "°";
-        document.getElementById("gps-lon").innerText = lon.toFixed(4) + "°";
+        
+        const latEl = document.getElementById("gps-lat");
+        const lonEl = document.getElementById("gps-lon");
+        if(latEl) latEl.innerText = lat.toFixed(4) + "°";
+        if(lonEl) lonEl.innerText = lon.toFixed(4) + "°";
     }
 };
+
+// Alias de compatibilidad por si se llama updateMapPosition en otra parte
+window.updateMapPosition = window.updateGPSPosition;

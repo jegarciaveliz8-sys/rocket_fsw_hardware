@@ -1,121 +1,122 @@
-let ws;
-let replayActive = false;
-let selectedMissionForPDF = 1;
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${wsProtocol}//${window.location.host}/ws/telemetry`;
 
-const ctx = document.getElementById('telemetryChart').getContext('2d');
-const telemetryChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [
-            { label: 'Altitud (km)', data: [], borderColor: '#34d399', backgroundColor: 'rgba(52, 211, 153, 0.1)', fill: true },
-            { label: 'Velocidad (m/s)', data: [], borderColor: '#38bdf8', fill: false }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
-            y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
-        }
-    }
-});
+let socket = null;
+let missionStartTime = null;
 
-function logEvent(msg, type = "INFO") {
-    const consoleEl = document.getElementById("mcc-console");
-    if (!consoleEl) return;
-    const timeStr = new Date().toLocaleTimeString();
-    const color = type === "WARN" ? "#facc15" : (type === "ERROR" ? "#f87171" : "#34d399");
-    consoleEl.innerHTML += `<br><span style="color:${color}">[${timeStr}] [${type}]</span> ${msg}`;
-    consoleEl.scrollTop = consoleEl.scrollHeight;
-}
+function connectTelemetry() {
+    socket = new WebSocket(wsUrl);
 
-function connectWS() {
-    if (replayActive) return;
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    ws = new WebSocket(wsProtocol + window.location.host + "/ws/telemetry");
-
-    ws.onopen = function() {
-        const statusEl = document.getElementById("ws-status");
-        if (statusEl) {
+    socket.onopen = function() {
+        const statusEl = document.getElementById('ws-status');
+        if(statusEl) {
             statusEl.innerText = "CONNECTED (RTOS KERNEL)";
             statusEl.style.color = "#34d399";
         }
-        logEvent("Enlace binario CCSDS en vivo establecido con el RTOS FSW.", "INFO");
     };
 
-    ws.onmessage = function(event) {
-        if (replayActive) return;
+    socket.onmessage = function(event) {
         const data = JSON.parse(event.data);
-        
-        // Actualizar métricas generales
-        const altEl = document.getElementById("metric-alt");
-        const velEl = document.getElementById("metric-vel");
-        const pcEl = document.getElementById("metric-pc");
-        const dsnEl = document.getElementById("metric-dsn");
-        const fswEl = document.getElementById("fsw-sequence");
-        const blackoutEl = document.getElementById("metric-blackout");
 
-        if (altEl) altEl.innerText = (data.altitude || 0) + " km";
-        if (velEl) velEl.innerText = (data.velocity || 0) + " m/s";
-        if (pcEl) pcEl.innerText = "15.4 MPa";
-        if (dsnEl) dsnEl.innerText = data.dsn_station || "Madrid (DSS-63)";
-        if (fswEl) fswEl.innerText = data.status || "STANDBY";
-        if (blackoutEl) blackoutEl.innerText = data.blackout_status || "NOMINAL";
+        document.getElementById('metric-alt').innerText = `${data.altitude} m`;
+        document.getElementById('metric-vel').innerText = `${data.speed} m/s`;
+        document.getElementById('metric-dsn').innerText = data.dsn_station;
+        document.getElementById('fsw-sequence').innerText = data.status;
 
-        // Llamar al inspector crudo de bits
-        if (typeof window.updateRawInspector === 'function') {
-            window.updateRawInspector(data);
+        // Actualizar Batería y Barra de Progreso
+        const batVal = data.battery_pct !== undefined ? data.battery_pct : 100.0;
+        document.getElementById('metric-battery').innerText = `${batVal}%`;
+        const batteryFill = document.getElementById('battery-fill');
+        if (batteryFill) {
+            batteryFill.style.width = `${batVal}%`;
+            batteryFill.style.backgroundColor = batVal < 30 ? '#f87171' : (batVal < 60 ? '#facc15' : '#34d399');
         }
 
-        // Actualizar actitud 3D y mapa GIS si existen las funciones
-        if (typeof updateRocketAttitude === 'function') {
-            updateRocketAttitude(data.pitch, data.yaw, data.roll);
+        // Cronómetro MET (Mission Elapsed Time)
+        if (data.status.includes("NAVIGATING") || data.status.includes("MISSION")) {
+            if (!missionStartTime) missionStartTime = Date.now() - (data.time * 1000);
+            const elapsedSec = Math.floor((Date.now() - missionStartTime) / 1000);
+            const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+            const secs = String(elapsedSec % 60).padStart(2, '0');
+            document.getElementById('met-timer').innerText = `T+${mins}:${secs}`;
         }
+
+        document.getElementById('val-pitch').innerText = `${data.pitch}°`;
+        document.getElementById('val-yaw').innerText = `${data.yaw}°`;
+        document.getElementById('val-roll').innerText = `${data.roll}°`;
+
+        // Actualizar Horizonte Artificial PFD
+        if (typeof drawAttitudeIndicator === 'function') {
+            drawAttitudeIndicator(data.pitch, data.roll, data.yaw);
+        }
+
+        document.getElementById('raw-ccsds').innerHTML = `FRAME: ${data.ccsds_frame}<br>CRC: VALID | Drifts: ${data.clock_drift_ms}ms`;
+
+        // Actualizar posición en Mapa GIS
         if (typeof updateGPSPosition === 'function') {
             updateGPSPosition(data.lat, data.lon);
         }
 
         // Actualizar gráfica Chart.js
-        if (telemetryChart.data.labels.length > 30) {
-            telemetryChart.data.labels.shift();
-            telemetryChart.data.datasets[0].data.shift();
-            telemetryChart.data.datasets[1].data.shift();
+        if (typeof updateChartData === 'function') {
+            updateChartData(data.time, data.altitude, data.speed);
         }
-        telemetryChart.data.labels.push("T+" + (data.time || 0) + "s");
-        telemetryChart.data.datasets[0].data.push(data.altitude || 0);
-        telemetryChart.data.datasets[1].data.push(data.velocity || 0);
-        telemetryChart.update();
+
+        if (data.alerts && data.alerts.length > 0) {
+            const consoleBox = document.getElementById('mcc-console');
+            if (consoleBox) {
+                data.alerts.forEach(alert => {
+                    const timeStr = new Date().toLocaleTimeString();
+                    const alertClass = alert.level === 'CRITICAL' ? 'alert-critical' : 'alert-warning';
+                    const logEntry = document.createElement('div');
+                    logEntry.className = alertClass;
+                    logEntry.innerHTML = `[${timeStr}] [ALERTA FSW - ${alert.level}] ${alert.message}`;
+                    consoleBox.appendChild(logEntry);
+                    consoleBox.scrollTop = consoleBox.scrollHeight;
+                });
+            }
+        }
     };
 
-    ws.onclose = function() {
-        if (!replayActive) {
-            const statusEl = document.getElementById("ws-status");
-            if (statusEl) {
-                statusEl.innerText = "DISCONNECTED";
-                statusEl.style.color = "#f87171";
-            }
-            setTimeout(connectWS, 3000);
+    socket.onclose = function() {
+        const statusEl = document.getElementById('ws-status');
+        if(statusEl) {
+            statusEl.innerText = "DISCONNECTED (RECONNECTING...)";
+            statusEl.style.color = "#f87171";
         }
+        setTimeout(connectTelemetry, 3000);
     };
 }
 
-function sendCommand(cmd) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ command: cmd }));
-        logEvent(`Comando Uplink AES-GCM enviado: ${cmd}`, "INFO");
+async function sendCommand(cmd) {
+    const consoleBox = document.getElementById('mcc-console');
+    try {
+        const response = await fetch('/api/commands/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd })
+        });
+        const result = await response.json();
+        
+        if(consoleBox) {
+            const timeStr = new Date().toLocaleTimeString();
+            consoleBox.innerHTML += `<br><span style="color: #38bdf8;">[${timeStr}] [COMANDO FSW] ${result.message}</span>`;
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+    } catch (error) {
+        if(consoleBox) {
+            consoleBox.innerHTML += `<br><span style="color: #f87171;">[ERROR] No se pudo enviar el comando ${cmd}.</span>`;
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
     }
 }
 
 function triggerFTS() {
-    let code = prompt("🚨 INGRESE LLAVE DE SEGURIDAD FTS (HMAC-SHA256):");
-    if (code === "ODYSSEY-ABORT") {
-        sendCommand("ABORT");
-        logEvent("¡FTS EJECUTADO DESDE LA ESTACIÓN TERRESTRE!", "ERROR");
-    } else {
-        logEvent("Falla en validación de llave FTS.", "WARN");
+    if(confirm("⚠️ ¿ESTÁS SEGURO DE ACTIVAR EL SISTEMA DE ABORTO (FTS)?")) {
+        sendCommand('FTS_ABORT');
     }
 }
 
-connectWS();
+window.addEventListener('DOMContentLoaded', () => {
+    connectTelemetry();
+});

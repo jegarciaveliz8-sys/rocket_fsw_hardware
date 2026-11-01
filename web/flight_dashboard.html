@@ -6,41 +6,55 @@
     <link rel="stylesheet" href="/web/css/mcc_styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
-    <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css' rel='stylesheet' />
     <style>
         body { background-color: #0b0f19; color: #c9d1d9; font-family: 'Courier New', Courier, monospace; margin: 0; padding: 15px; box-sizing: border-box; }
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-bottom: 15px; }
         h1 { color: #34d399; margin: 0; font-size: 1.3rem; }
         
-        /* Grid balanceado y acotado para evitar estiramientos excesivos */
         .dashboard-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 15px; align-items: start; }
         @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 15px; }
         .card { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; }
         .card h3 { margin-top: 0; color: #8b949e; font-size: 0.65rem; text-transform: uppercase; }
         .value { font-size: 1.1rem; font-weight: bold; color: #34d399; }
-        .console-box { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 110px; overflow-y: auto; font-size: 0.75rem; margin-bottom: 15px; }
-        .chart-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 200px; position: relative; margin-bottom: 15px; }
-        .map-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 320px; margin-bottom: 15px; position: relative; }
-        #map { width: 100%; height: 250px; border-radius: 4px; background: #050811; }
+        
+        /* Batería y Progreso */
+        .battery-container { margin-top: 6px; background: #050811; border: 1px solid #21262d; border-radius: 4px; height: 8px; overflow: hidden; position: relative; }
+        .battery-fill { background: #34d399; height: 100%; width: 100%; transition: width 0.5s ease, background-color 0.5s ease; }
+
+        .console-box { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 100px; overflow-y: auto; font-size: 0.75rem; margin-bottom: 15px; }
+        .chart-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 180px; position: relative; margin-bottom: 15px; }
+        .map-container { background: #111622; border: 1px solid #21262d; padding: 10px; border-radius: 6px; height: 300px; margin-bottom: 15px; position: relative; }
+        #map { width: 100%; height: 230px; border-radius: 4px; background: #050811; }
         .gps-overlay { display: flex; justify-content: space-between; font-size: 0.7rem; color: #38bdf8; margin-bottom: 6px; font-weight: bold; }
         .map-controls-bar { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
         .map-btn { background: #21262d; color: #38bdf8; border: 1px solid #30363d; padding: 3px 8px; font-size: 0.65rem; border-radius: 3px; cursor: pointer; font-family: monospace; }
         .map-btn:hover { background: #30363d; color: #34d399; }
-        .btn-controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        
+        .btn-controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
         button { background: #1f6feb; color: white; border: none; padding: 6px 14px; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
         button:hover { background: #388bfd; }
         .btn-fts { background: #da3633; }
         .btn-fts:hover { background: #f85149; }
+        
+        .met-clock { font-size: 0.9rem; font-weight: bold; color: #facc15; background: #050811; padding: 6px 12px; border: 1px solid #21262d; border-radius: 4px; }
+        
         .side-panel { display: flex; flex-direction: column; gap: 15px; }
-        .code-inspector { background: #050811; border: 1px solid #21262d; padding: 10px; border-radius: 6px; font-size: 0.7rem; color: #38bdf8; word-break: break-all; }
-        .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 240px; }
-        .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.8rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 8px; background: #050811; border-radius: 4px; display: flex; flex-direction: column; gap: 8px; line-height: 1.3; }
-        .ai-messages div { font-size: 0.8rem !important; }
+        .code-inspector { background: #050811; border: 1px solid #21262d; padding: 8px; border-radius: 6px; font-size: 0.68rem; color: #38bdf8; word-break: break-all; }
+        
+        /* Canvas Horizonte Artificial */
+        #attitudeCanvas { width: 100%; height: 130px; background: #050811; border-radius: 4px; border: 1px solid #21262d; display: block; }
+        
+        /* Lista de Waypoints */
+        .wp-list { max-height: 110px; overflow-y: auto; font-size: 0.7rem; background: #050811; border: 1px solid #21262d; padding: 6px; border-radius: 4px; }
+        .wp-item { display: flex; justify-content: space-between; border-bottom: 1px solid #161b22; padding: 3px 0; color: #8b949e; }
+        .wp-item.active { color: #34d399; font-weight: bold; }
+
+        .ai-chat { background: #111622; border: 1px solid #21262d; padding: 12px; border-radius: 6px; display: flex; flex-direction: column; height: 210px; }
+        .ai-messages { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; margin-bottom: 8px; border: 1px solid #21262d; padding: 6px; background: #050811; border-radius: 4px; display: flex; flex-direction: column; gap: 6px; line-height: 1.2; }
         .ai-input-group { display: flex; gap: 6px; }
-        .ai-input-group input { flex-grow: 1; background: #0b0f19; border: 1px solid #21262d; color: white; padding: 6px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; }
+        .ai-input-group input { flex-grow: 1; background: #0b0f19; border: 1px solid #21262d; color: white; padding: 5px; border-radius: 4px; font-family: monospace; font-size: 0.75rem; }
     </style>
 </head>
 <body>
@@ -54,32 +68,36 @@
     <div class="btn-controls">
         <button onclick="sendCommand('LAUNCH')">▶ INICIAR LANZAMIENTO</button>
         <button class="btn-fts" onclick="triggerFTS()">🚨 FTS (ABORT)</button>
+        <div class="met-clock">MET: <span id="met-timer">T+00:00</span></div>
     </div>
 
     <div class="dashboard-grid">
-        <!-- Columna Principal -->
         <div>
             <div class="grid">
-                <div class="card"><h3>Altitud</h3><div id="metric-alt" class="value">398.7 km</div></div>
-                <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="value">7669.58 m/s</div></div>
+                <div class="card"><h3>Altitud</h3><div id="metric-alt" class="value">5 m</div></div>
+                <div class="card"><h3>Velocidad</h3><div id="metric-vel" class="value">12.5 m/s</div></div>
                 <div class="card"><h3>Presión Cámara (Pc)</h3><div id="metric-pc" class="value" style="color: #38bdf8;">15.4 MPa</div></div>
-                <div class="card"><h3>Estación DSN</h3><div id="metric-dsn" class="value" style="font-size: 0.8rem; color: #94a3b8;">Madrid (DSS-63)</div></div>
-                <div class="card"><h3>Secuencia FSW</h3><div id="fsw-sequence" class="value" style="font-size: 0.8rem; color: #facc15;">STANDBY</div></div>
-                <div class="card"><h3>Blackout / Estado</h3><div id="metric-blackout" class="value" style="font-size: 0.8rem; color: #38bdf8;">SIMULATION</div></div>
+                <div class="card">
+                    <h3>Batería LiPo</h3>
+                    <div id="metric-battery" class="value" style="font-size: 0.95rem; color: #34d399;">100.0%</div>
+                    <div class="battery-container"><div id="battery-fill" class="battery-fill"></div></div>
+                </div>
+                <div class="card"><h3>Secuencia FSW</h3><div id="fsw-sequence" class="value" style="font-size: 0.75rem; color: #facc15;">STANDBY</div></div>
+                <div class="card"><h3>Estado DSN</h3><div id="metric-dsn" class="value" style="font-size: 0.75rem; color: #94a3b8;">Sanarate GCS</div></div>
             </div>
 
             <div class="chart-container"><canvas id="telemetryChart"></canvas></div>
 
             <div class="map-container">
                 <div class="gps-overlay">
-                    <span>📡 GOOGLE ADVANCED GIS & USER RADAR</span>
-                    <span>LAT: <span id="gps-lat" style="color:#34d399;">28.5721°</span> | LON: <span id="gps-lon" style="color:#34d399;">-80.6480°</span></span>
+                    <span>📡 GOOGLE ADVANCED GIS & SANARATE RADAR</span>
+                    <span>LAT: <span id="gps-lat" style="color:#34d399;">14.7883°</span> | LON: <span id="gps-lon" style="color:#34d399;">-90.1988°</span></span>
                 </div>
                 <div class="map-controls-bar">
-                    <button class="map-btn" onclick="setLayer('roadmap')">🗺️ Google Calles</button>
-                    <button class="map-btn" onclick="setLayer('satellite')">🛰️ Satélite HD</button>
-                    <button class="map-btn" onclick="setLayer('hybrid')">🌐 Híbrido Avanzado</button>
-                    <button class="map-btn" onclick="locateUser()" style="background: #1f6feb; color: white;">📍 Marcar Mi Ubicación</button>
+                    <button class="map-btn" onclick="setLayer('roadmap')">🗺️ Calles</button>
+                    <button class="map-btn" onclick="setLayer('satellite')">🛰️ Satélite</button>
+                    <button class="map-btn" onclick="setLayer('hybrid')">🌐 Híbrido</button>
+                    <button class="map-btn" onclick="locateUser()" style="background: #1f6feb; color: white;">📍 Centrar Base</button>
                 </div>
                 <div id="map"></div>
             </div>
@@ -90,25 +108,51 @@
             </div>
         </div>
 
-        <!-- Columna Lateral -->
         <div class="side-panel">
             <div class="card">
-                <h3>Orientación (Attitude 3D)</h3>
-                <p style="margin: 4px 0;">Pitch: <span id="val-pitch" style="color: #34d399;">3.92°</span></p>
-                <p style="margin: 4px 0;">Yaw: <span id="val-yaw" style="color: #38bdf8;">0°</span></p>
-                <p style="margin: 4px 0;">Roll: <span id="val-roll" style="color: #facc15;">161°</span></p>
+                <h3>Horizonte Artificial (PFD)</h3>
+                <canvas id="attitudeCanvas"></canvas>
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; margin-top: 4px; color: #8b949e;">
+                    <span>Pitch: <span id="val-pitch" style="color: #34d399;">0°</span></span>
+                    <span>Roll: <span id="val-roll" style="color: #facc15;">0°</span></span>
+                    <span>Yaw: <span id="val-yaw" style="color: #38bdf8;">0°</span></span>
+                </div>
+            </div>
+
+            <!-- Nuevo Panel de Inyección de Fallas integrado -->
+            <div class="card">
+                <h3>Simulador de Fallas (Fault Injection)</h3>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; margin-top: 6px;">
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Pérdida RF (Blackout)</span>
+                        <input type="checkbox" onchange="toggleFault('rf_blackout', this.checked)">
+                    </label>
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Falla de GPS (No Fix)</span>
+                        <input type="checkbox" onchange="toggleFault('gps_failure', this.checked)">
+                    </label>
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Batería Crítica (LiPo Drop)</span>
+                        <input type="checkbox" onchange="toggleFault('low_battery_spike', this.checked)">
+                    </label>
+                </div>
             </div>
 
             <div class="card">
-                <h3>Estado de Subsistemas (HIL)</h3>
-                <p style="margin: 4px 0;">Aviónica: <span style="color: #34d399;">NOMINAL</span></p>
-                <p style="margin: 4px 0;">Propulsión: <span style="color: #34d399;">ARMED</span></p>
-                <p style="margin: 4px 0;">Ruedas Inerciales: <span id="rw-status" style="color: #38bdf8;">ACTIVE</span></p>
+                <h3>Ruta Autónoma (Waypoints)</h3>
+                <div id="wp-list-container" class="wp-list">
+                    <div class="wp-item"><span>WP0: Base Sanarate</span><span>25m</span></div>
+                    <div class="wp-item"><span>WP1: Norte Zona Alta</span><span>40m</span></div>
+                    <div class="wp-item"><span>WP2: Desplazamiento Oeste</span><span>50m</span></div>
+                    <div class="wp-item"><span>WP3: Giro Sur Perímetro</span><span>45m</span></div>
+                    <div class="wp-item"><span>WP4: Aproximación Base</span><span>30m</span></div>
+                    <div class="wp-item"><span>WP5: RTL / Aterrizaje</span><span>5m</span></div>
+                </div>
             </div>
 
             <div class="card">
                 <h3>Inspector CCSDS Crudo</h3>
-                <div id="raw-ccsds" class="code-inspector">FRAME: 01AF0008414C543A3339382E3835...2FDC<br>CRC: VALID | Drifts: 0.15ms</div>
+                <p id="raw-ccsds" class="code-inspector" style="margin:0;">FRAME: 01AF...<br>CRC: VALID | Drifts: 0.15ms</p>
             </div>
 
             <div class="ai-chat">
@@ -117,17 +161,38 @@
                     <div style="color: #8b949e;">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</div>
                 </div>
                 <div class="ai-input-group">
-                    <input type="text" id="ai-input" placeholder="Pregúntale al cohete..." onkeypress="handleAIPress(event)">
+                    <input type="text" id="ai-input" placeholder="Pregúntale al FSW..." onkeypress="handleAIPress(event)">
                     <button onclick="askAI()">Enviar</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Subsistemas JavaScript Modulares -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/web/js/map_module.js"></script>
+    <script src="/web/js/chart_module.js"></script>
+    <script src="/web/js/attitude_module.js"></script>
     <script src="/web/js/ai_chat_module.js"></script>
     <script src="/web/js/telemetry_ws.js"></script>
+    <script>
+        async function toggleFault(faultType, isActive) {
+            try {
+                const response = await fetch('/api/faults/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fault_type: faultType, active: isActive })
+                });
+                const result = await response.json();
+                const consoleBox = document.getElementById('mcc-console');
+                if (consoleBox) {
+                    const timeStr = new Date().toLocaleTimeString();
+                    consoleBox.innerHTML += `<br><span style="color: #f87171;">[${timeStr}] [INYECCIÓN DE FALLA] ${result.fault} -> ${result.active ? 'ACTIVADO' : 'APAGADO'}</span>`;
+                    consoleBox.scrollTop = consoleBox.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Error al enviar comando de falla", err);
+            }
+        }
+    </script>
 </body>
 </html>

@@ -8,7 +8,7 @@ import hmac
 import math
 import uvicorn
 
-from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner, stations_api, mission_uplink
+from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner, stations_api, mission_uplink, auth_manager
 from routers.stations_api import get_active_station_telemetry
 
 app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
@@ -27,6 +27,7 @@ app.include_router(fault_injection.router)
 app.include_router(mission_planner.router)
 app.include_router(stations_api.router)
 app.include_router(mission_uplink.router)
+app.include_router(auth_manager.router)
 
 BASE_LAT, BASE_LON = 14.7883, -90.1988
 

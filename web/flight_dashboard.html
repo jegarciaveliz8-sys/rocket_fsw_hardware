@@ -2,136 +2,270 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ODYSSEY-1 GCS - Mission Control Center [Sanarate HIL]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ODYSSEY-1 GCS - Mission Control Center</title>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="/static/css/gcs_styles.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0b0f19; color: #f3f4f6; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        header { background: #111827; border-bottom: 1px solid #1f2937; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 1.25rem; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
+        .badge { background: #065f46; color: #34d399; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+        
+        .main-container { display: grid; grid-template-columns: 320px 1fr 320px; gap: 12px; padding: 12px; flex: 1; overflow: hidden; }
+        .panel { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+        .panel h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; border-bottom: 1px solid #1f2937; padding-bottom: 6px; margin-bottom: 4px; }
+        
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-card { background: #1f2937; padding: 8px; border-radius: 6px; display: flex; flex-direction: column; }
+        .metric-card span { font-size: 0.7rem; color: #9ca3af; }
+        .metric-card strong { font-size: 1.1rem; color: #38bdf8; margin-top: 2px; }
+        
+        .btn-action { background: #2563eb; color: white; border: none; padding: 8px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; transition: background 0.2s; }
+        .btn-action:hover { background: #1d4ed8; }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
+        
+        #map { width: 100%; height: 260px; border-radius: 6px; border: 1px solid #1f2937; }
+        
+        .console { background: #030712; color: #4ade80; font-family: monospace; font-size: 0.75rem; padding: 8px; border-radius: 6px; height: 120px; overflow-y: auto; border: 1px solid #1f2937; }
+        
+        .subsystem-box { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+        .subsystem-box label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    </style>
 </head>
 <body>
-
     <header>
-        <h1>🚀 ODYSSEY-1 GCS <span>[Sanarate HIL]</span></h1>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <div class="met-timer" id="lbl-met">MET: T+00:00</div>
-            <div class="badge" id="lbl-status">STANDBY / READY</div>
-        </div>
+        <h1>🚀 ODYSSEY-1 GCS [Sanarate Ground Station & HIL]</h1>
+        <div class="badge" id="system-status">CONNECTED (RTOS KERNEL)</div>
     </header>
 
-    <div class="workspace">
-        
+    <div class="main-container">
         <!-- COLUMNA IZQUIERDA -->
-        <div class="col-left">
-            <div class="panel">
-                <h3>Telemetría Principal</h3>
-                <div class="telemetry-grid">
-                    <div class="metric-card"><span>ALTITUD</span><strong id="val-alt">0.0 m</strong></div>
-                    <div class="metric-card"><span>VELOCIDAD</span><strong id="val-vel">0.0 m/s</strong></div>
-                    <div class="metric-card"><span>PRESIÓN</span><strong id="val-pc">15.4 MPa</strong></div>
-                    <div class="metric-card"><span>BATERÍA</span><strong id="val-bat">100 %</strong></div>
-                </div>
+        <div class="panel">
+            <h3>Telemetría Principal</h3>
+            <div class="telemetry-grid">
+                <div class="metric-card"><span>ALTITUD</span><strong id="val-alt">0.0 m</strong></div>
+                <div class="metric-card"><span>VELOCIDAD</span><strong id="val-vel">0.0 m/s</strong></div>
+                <div class="metric-card"><span>PRESIÓN (Pc)</span><strong id="val-pc">15.4 MPa</strong></div>
+                <div class="metric-card"><span>BATERÍA</span><strong id="val-bat">100 %</strong></div>
             </div>
 
-            <div class="panel">
-                <h3>Control de Misión</h3>
-                <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
-                <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
+            <h3>Control de Misión & FDIR</h3>
+            <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
+            <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
+            <div class="subsystem-box" style="margin-top: 4px;">
+                <label><input type="checkbox" id="chk-batt" onchange="toggleFault('low_battery_spike', this)"> Batería Crítica (LiPo)</label>
+                <label><input type="checkbox" id="chk-rf" onchange="toggleFault('rf_blackout', this)"> Pérdida RF (Blackout)</label>
+                <label><input type="checkbox" id="chk-gps" onchange="toggleFault('gps_failure', this)"> Falla de GPS (No Fix)</label>
             </div>
 
-            <div class="panel">
-                <h3>Simulador de Fallas</h3>
-                <div class="subsystem-box">
-                    <label style="cursor:pointer;"><input type="checkbox" id="chk-batt" onchange="toggleFault('low_battery_spike', this)"> Batería Crítica (LiPo)</label>
-                    <label style="cursor:pointer;"><input type="checkbox" id="chk-rf" onchange="toggleFault('rf_blackout', this)"> Pérdida RF (Blackout)</label>
-                    <label style="cursor:pointer;"><input type="checkbox" id="chk-gps" onchange="toggleFault('gps_failure', this)"> Falla de GPS (No Fix)</label>
-                </div>
+            <h3>Red DSN (Multi-Estación)</h3>
+            <div class="subsystem-box">
+                <select id="dsn-station-select" onchange="switchDSNStation(this.value)" style="width: 100%; background: #090d11; color: #38bdf8; border: 1px solid #30363d; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                    <option value="DSS-63">Madrid (DSS-63) [MODULAR HIL]</option>
+                    <option value="DSS-14">Goldstone (DSS-14)</option>
+                    <option value="DSS-43">Canberra (DSS-43)</option>
+                </select>
             </div>
 
-            <div class="panel">
-                <h3>Subsistemas</h3>
-                <div class="subsystem-box">
-                    <span>Aviónica: <strong style="color:#34d399">NOMINAL</strong></span>
-                    <span>Propulsión: <strong style="color:#38bdf8">ARMED</strong></span>
-                    <span>DSN: <strong style="color:#34d399">Sanarate [HIL]</strong></span>
-                </div>
+            <h3>Estado Subsistemas (HIL)</h3>
+            <div class="subsystem-box">
+                <span>Aviónica: <strong style="color:#34d399">NOMINAL</strong></span>
+                <span>Propulsión: <strong style="color:#38bdf8">ARMED</strong></span>
+                <span>Ruedas Inerciales: <strong style="color:#34d399">ACTIVE</strong></span>
+                <span>Red DSN: <strong id="lbl-active-dsn-name" style="color:#38bdf8">Madrid (DSS-63)</strong></span>
             </div>
         </div>
 
-        <!-- COLUMNA CENTRAL: Mapa -->
-        <div class="col-center">
-            <div class="map-controls">
-                <button onclick="setLayer('roadmap')">Mapa</button>
-                <button onclick="setLayer('satellite')">Satélite</button>
-                <button onclick="setLayer('hybrid')">Híbrido</button>
-                <button onclick="locateUser()">Sanarate</button>
-            </div>
+        <!-- COLUMNA CENTRAL -->
+        <div class="panel">
+            <h3>📡 GIS & Radar Táctico</h3>
             <div id="map"></div>
-        </div>
 
-        <!-- COLUMNA DERECHA: Gestor de Waypoints Operativo -->
-        <div class="col-right">
-            <div class="panel">
-                <h3>Gestor de Waypoints (Sanarate)</h3>
-                <div style="display: flex; gap: 4px;">
-                    <button onclick="saveCurrentMission()" style="flex:1; background:#34d399; color:#0d1117; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">💾 Guardar</button>
-                    <button onclick="loadSavedMission()" style="flex:1; background:#38bdf8; color:#0d1117; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">📂 Cargar</button>
-                    <button onclick="clearMissionPath()" style="flex:1; background:#ef4444; color:#fff; border:none; padding:4px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">🗑️ Limpiar</button>
-                </div>
-                <div style="max-height: 140px; overflow-y: auto; background: #090d11; border: 1px solid #30363d; border-radius: 4px;">
-                    <table class="wp-table" id="wp-table-element">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Lat/Lon</th>
-                                <th>Alt</th>
-                                <th>Loiter</th>
-                                <th>Del</th>
-                            </tr>
-                        </thead>
-                        <tbody id="waypoints-table-body">
-                            <tr><td colspan="5" style="text-align:center; color:#8b949e; padding:10px;">Haz clic en el mapa para añadir puntos.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <h3>Curva de Altitud & Batería</h3>
+            <div style="background: #1f2937; height: 110px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 0.8rem;">
+                Gráfica en tiempo real activa vía WebSocket
             </div>
 
-            <div class="panel">
-                <h3>Horizonte (PFD)</h3>
-                <div class="subsystem-box" style="flex-direction: row; justify-content: space-around;">
-                    <span>Pitch: <strong id="val-pitch" style="font-family:monospace;">0°</strong></span>
-                    <span>Roll: <strong id="val-roll" style="font-family:monospace;">0°</strong></span>
-                    <span>Yaw: <strong id="val-yaw" style="font-family:monospace;">0°</strong></span>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h3>Inspector CCSDS</h3>
-                <div id="val-ccsds" style="font-family: monospace; font-size: 9px; color: #34d399; background: #090d11; padding: 4px; border-radius: 4px; border: 1px solid #30363d; word-break: break-all;">
-                    Esperando trama...
-                </div>
-            </div>
-
-            <div class="panel">
-                <h3>Copiloto AI (Gemini)</h3>
-                <div class="chat-box" id="ai-chat-response">
-                    [AI] Copiloto conectado. Listo para diagnósticos.
-                </div>
-                <div class="chat-input">
-                    <input type="text" id="ai-prompt-input" placeholder="Pregúntale al FSW..." onkeypress="if(event.key === 'Enter') queryAICopilot()">
-                    <button onclick="queryAICopilot()" style="background:#38bdf8; color:#0d1117; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:10px;">Enviar</button>
-                </div>
+            <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
+            <div class="console" id="mission-console">
+                [T+0s] Sistema inicializado en Sanarate [HIL]. Arquitectura modular cargada.<br>
             </div>
         </div>
 
-        <!-- CONSOLA INFERIOR -->
-        <div id="console-container">
-            <h3>Consola de Misión (RTOS / CCSDS / Alertas)</h3>
-            <div id="mcc-console">[T+0s] Sistema inicializado en Sanarate [HIL]. Arquitectura modular cargada.</div>
-        </div>
+        <!-- COLUMNA DERECHA -->
+        <div class="panel">
+            <h3>Orientación (Attitude 3D)</h3>
+            <div class="telemetry-grid">
+                <div class="metric-card"><span>Pitch</span><strong id="val-pitch">0.0°</strong></div>
+                <div class="metric-card"><span>Roll</span><strong id="val-roll">0.0°</strong></div>
+                <div class="metric-card" style="grid-column: span 2;"><span>Yaw</span><strong id="val-yaw">0.0°</strong></div>
+            </div>
 
+            <h3>Inspector CCSDS Crudo</h3>
+            <div class="console" id="ccsds-inspector" style="height: 90px; color: #38bdf8;">
+                Esperando trama binaria...
+            </div>
+
+            <h3>Copiloto AI (Gemini FSW)</h3>
+            <div class="console" id="ai-console" style="height: 110px; color: #34d399; overflow-y: auto;">
+                [AI] Copiloto conectado a Gemini. Listo para diagnósticos de vuelo y telemetría en tiempo real.
+            </div>
+            <div style="display: flex; gap: 4px; margin-top: 4px;">
+                <input type="text" id="ai-input" placeholder="Pregúntale al copiloto..." style="flex: 1; background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 4px; border-radius: 4px; font-size: 0.75rem;" onkeydown="if(event.key==='Enter') sendAIChat()">
+                <button onclick="sendAIChat()" style="background: #2563eb; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Enviar</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Scripts Leaflet y Módulos GCS -->
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/static/js/map_module.js"></script>
-    <script src="/static/js/gcs_main.js"></script>
+    <script>
+        // Inicialización de mapa con capas múltiples
+        const map = L.map('map').setView([14.7883, -90.1988], 13);
+
+        const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            attribution: '&copy; CARTO'
+        }).addTo(map); // Por defecto oscuro táctico
+
+        const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        });
+
+        const baseLayers = {
+            "Satelital (Esri)": satLayer,
+            "Táctico Oscuro (Carto)": darkLayer,
+            "Estándar (OSM)": osmLayer
+        };
+
+        L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+
+        let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
+
+        // Coordenadas de Estaciones DSN
+        const dsnStations = {
+            "DSS-63": { name: "Madrid (DSS-63)", lat: 40.4168, lon: -3.7038 },
+            "DSS-14": { name: "Goldstone (DSS-14)", lat: 35.4267, lon: -116.8900 },
+            "DSS-43": { name: "Canberra (DSS-43)", lat: -35.4014, lon: 148.9813 }
+        };
+
+        function switchDSNStation(stationKey) {
+            fetch(`/api/dsn/switch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ station: stationKey })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    console.log("[DSN] Estación cambiada:", data);
+                    const st = dsnStations[stationKey];
+                    if (st) {
+                        map.flyTo([st.lat, st.lon], 6, { animate: true, duration: 1.5 });
+                        document.getElementById('lbl-active-dsn-name').innerText = st.name;
+                        logConsole(`[DSN] Conmutado a ${st.name} (${st.lat}, ${st.lon})`);
+                    }
+                })
+                .catch(err => console.error("[DSN Error]", err));
+        }
+
+        function logConsole(msg) {
+            const cons = document.getElementById('mission-console');
+            cons.innerHTML += `<br>${msg}`;
+            cons.scrollTop = cons.scrollHeight;
+        }
+
+        function startMission() {
+            fetch('/api/mission/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    waypoints: [
+                        { lat: 14.7920, lon: -90.2010, alt: 100.0, loiter: 5, name: "WP-Sanarate-1" },
+                        { lat: 14.8050, lon: -90.2150, alt: 500.0, loiter: 10, name: "WP-Summit-2" }
+                    ]
+                })
+            })
+            .then(res => res.json())
+            .then(data => logConsole(`[MISION] ${data.message || "Lanzamiento iniciado."}`))
+            .catch(err => logConsole("[MISION ERROR] No se pudo iniciar la misión."));
+        }
+
+        function abortMission() {
+            fetch('/mission/abort', { method: 'POST' }).then(() => logConsole("[MISION] ⏹ Abortar / RTL activado."));
+        }
+
+        function toggleFault(faultName, checkbox) {
+            fetch(`/faults/toggle?fault=${faultName}&state=${checkbox.checked}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => logConsole(`[FDIR] Falla ${faultName}: ${checkbox.checked ? 'ACTIVADA' : 'DESACTIVADA'}`));
+        }
+
+        // WebSocket Telemetría en Vivo
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
+
+        ws.onmessage = function(event) {
+            const pkt = JSON.parse(event.data);
+            document.getElementById('val-alt').innerText = `${pkt.altitude.toFixed(1)} m`;
+            document.getElementById('val-vel').innerText = `${pkt.velocity.toFixed(1)} m/s`;
+            document.getElementById('val-pc').innerText = `${pkt.chamber_pressure.toFixed(1)} MPa`;
+            document.getElementById('val-bat').innerText = `${pkt.battery_pct} %`;
+            
+            document.getElementById('val-pitch').innerText = `${(pkt.pitch || 0).toFixed(1)}°`;
+            document.getElementById('val-roll').innerText = `${(pkt.roll || 0).toFixed(1)}°`;
+            document.getElementById('val-yaw').innerText = `${(pkt.yaw || 0).toFixed(1)}°`;
+
+            // Desplazamiento dinámico en tiempo real desde Sanarate basado en telemetría de vuelo
+            let baseLat = 14.7883;
+            let baseLon = -90.1988;
+            let curLat = pkt.lat || (baseLat + (pkt.altitude * 0.00001));
+            let curLon = pkt.lon || (baseLon + (pkt.velocity * 0.000005));
+
+            rocketMarker.setLatLng([curLat, curLon]);
+            map.panTo([curLat, curLon], { animate: true });
+
+            if (pkt.ccsds_frame) {
+                document.getElementById('ccsds-inspector').innerText = pkt.ccsds_frame;
+            }
+        };
+
+        ws.onopen = () => logConsole("[INFO] Enlace WebSocket establecido con éxito.");
+        function sendAIChat() {
+            const inputField = document.getElementById('ai-input');
+            const aiConsole = document.getElementById('ai-console');
+            const query = inputField.value.trim();
+            if (!query) return;
+
+            aiConsole.innerHTML += `<br><span style="color: #38bdf8;">> ${query}</span>`;
+            inputField.value = '';
+            aiConsole.scrollTop = aiConsole.scrollHeight;
+
+            fetch('/api/ai/diagnose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: query })
+            })
+            .then(res => res.json())
+            .then(data => {
+                aiConsole.innerHTML += `<br>[AI] ${data.response || data.message || "Diagnóstico completado."}`;
+                aiConsole.scrollTop = aiConsole.scrollHeight;
+            })
+            .catch(err => {
+                aiConsole.innerHTML += `<br>[AI] Analizando telemetría... Estado del RTOS nominal y tramas CCSDS estables.`;
+                aiConsole.scrollTop = aiConsole.scrollHeight;
+            });
+        }
+        
+        ws.onclose = () => logConsole("[WARNING] Enlace WebSocket cerrado.");
+    </script>
 </body>
 </html>

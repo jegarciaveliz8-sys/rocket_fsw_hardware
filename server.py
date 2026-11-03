@@ -8,7 +8,8 @@ import hmac
 import math
 import uvicorn
 
-from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner
+from routers import mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, blackbox, commands_api, mission_path, fault_injection, mission_planner, stations_api, mission_uplink
+from routers.stations_api import get_active_station_telemetry
 
 app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
 
@@ -24,6 +25,8 @@ app.include_router(dji_bridge.router)
 app.include_router(commands_api.router)
 app.include_router(fault_injection.router)
 app.include_router(mission_planner.router)
+app.include_router(stations_api.router)
+app.include_router(mission_uplink.router)
 
 BASE_LAT, BASE_LON = 14.7883, -90.1988
 
@@ -35,9 +38,13 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2) * math.sin(dlambda/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    return {"system": "ODYSSEY-1 Core", "version": "1.3.0", "status": "nominal"}
+    html_path = os.path.join(BASE_DIR, "web", "flight_dashboard.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<html><body><h1>ODYSSEY-1 GCS</h1></body></html>"
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
@@ -118,7 +125,9 @@ async def websocket_telemetry(websocket: WebSocket):
                 "crc_valid": True,
                 "clock_drift_ms": 0.15,
                 "ccsds_frame": f"01AF0008{payload_bytes.hex().upper()[:20]}...{crc}",
-                "dsn_station": "Sanarate Ground Station [HIL / RF Link]",
+                "dsn_station": get_active_station_telemetry()["dsn_station"],
+                "snr": get_active_station_telemetry()["snr"],
+                "stations_status": get_active_station_telemetry()["stations_status"],
                 "blackout_status": sim_blackout_text,
                 "distance_from_base_m": round(distance_from_base, 1)
             }

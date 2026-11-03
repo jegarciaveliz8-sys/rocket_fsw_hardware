@@ -12,7 +12,7 @@ const trajectoryLine = L.polyline([], { color: '#38bdf8', weight: 3, opacity: 0.
 
 const dsnStations = {
     "Cape Canaveral": [28.5721, -80.6480],
-    "Madrid DSN": [40.4262, -4.2497],
+    "Sanarate HIL": [14.7883, -90.1988],
     "Goldstone DSN": [35.4266, -116.8900],
     "Canberra DSN": [-35.4014, 148.9817]
 };

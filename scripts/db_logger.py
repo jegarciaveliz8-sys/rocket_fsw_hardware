@@ -1,11 +1,15 @@
 import sqlite3
+import datetime
 import os
 
 DB_PATH = 'mission_database.db'
 
 def init_database():
+    """Inicializa las tablas de telemetría HIL y registros de eventos FDIR."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
+    # 1. Tabla principal de telemetría
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS telemetry_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -13,28 +17,46 @@ def init_database():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             altitude REAL,
             velocity REAL,
-            acceleration REAL
+            thrust_cmd REAL,
+            wind_disturbance REAL,
+            battery_pct REAL
         )
     ''')
     
-    # Insertar datos de vuelo de prueba si la tabla está vacía
-    cursor.execute("SELECT COUNT(*) FROM telemetry_logs")
-    if cursor.fetchone()[0] == 0:
-        test_data = [
-            ('MISSIO_001', 10.5, 12.0, 2.1),
-            ('MISSIO_001', 45.2, 35.0, 4.2),
-            ('MISSIO_001', 120.8, 58.5, 5.8),
-            ('MISSIO_001', 150.0, 60.0, 1.2),
-            ('MISSIO_001', 148.2, 0.0, -0.5)
-        ]
-        cursor.executemany('''
-            INSERT INTO telemetry_logs (mission_id, altitude, velocity, acceleration)
-            VALUES (?, ?, ?, ?)
-        ''', test_data)
-        print("[INFO] Datos de telemetría de prueba registrados en 'mission_database.db'.")
-    else:
-        print("[INFO] La base de datos ya contiene registros de telemetría.")
-        
+    # 2. Tabla para eventos de falla y diagnóstico FDIR
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fdir_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            event_type TEXT,
+            status TEXT,
+            details TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print("[INFO] Base de datos 'mission_database.db' estructurada correctamente para HIL y FDIR.")
+
+def log_telemetry(mission_id, alt, vel, thrust, wind, battery):
+    """Inserta una muestra del bucle H-infinito en la base de datos."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO telemetry_logs (mission_id, altitude, velocity, thrust_cmd, wind_disturbance, battery_pct)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (mission_id, alt, vel, thrust, wind, battery))
+    conn.commit()
+    conn.close()
+
+def log_fdir_event(event_type, status, details=""):
+    """Registra alertas o recuperaciones FDIR (ej: rf_blackout, low_battery)."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO fdir_events (event_type, status, details)
+        VALUES (?, ?, ?)
+    ''', (event_type, status, details))
     conn.commit()
     conn.close()
 

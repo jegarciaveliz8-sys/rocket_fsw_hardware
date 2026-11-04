@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Flight Deck</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #00ffcc; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
+        .nav-links a.active { color: #00ffcc; border-bottom: 2px solid #00ffcc; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        #map { height: 350px; border-radius: 6px; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .metric-box { background: #1f2937; padding: 10px; border-radius: 4px; text-align: center; }
+        .metric-value { font-size: 1.4em; color: #38bdf8; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/" class="active">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command & FDIR</a>
+        <a href="/engineering">🛠️ Engineering</a>
+    </div>
+    <h1>🚀 ODYSSEY-1 // Flight Operations Deck (Sanarate HIL)</h1>
+    <div class="grid">
+        <div>
+            <div class="card">
+                <h3>📡 Telemetría Principal</h3>
+                <div class="metrics-grid">
+                    <div class="metric-box"><div>ALTITUD</div><div class="metric-value" id="alt">0.0 m</div></div>
+                    <div class="metric-box"><div>VELOCIDAD</div><div class="metric-value" id="vel">0.0 m/s</div></div>
+                    <div class="metric-box"><div>PRESIÓN (Pc)</div><div class="metric-value" id="press">15.4 MPa</div></div>
+                    <div class="metric-box"><div>BATERÍA</div><div class="metric-value" id="bat">100.0 %</div></div>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="card">
+                <h3>🗺️ GIS & Radar Táctico</h3>
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([14.7883, -90.1988], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        const marker = L.marker([14.7883, -90.1988]).addTo(map).bindPopup('ODYSSEY-1 HIL Base');
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            document.getElementById('alt').innerText = data.altitude + ' m';
+            document.getElementById('vel').innerText = data.velocity + ' m/s';
+            document.getElementById('press').innerText = data.chamber_pressure + ' MPa';
+            document.getElementById('bat').innerText = data.battery_pct + ' %';
+            if (data.lat && data.lon) {
+                marker.setLatLng([data.lat, data.lon]);
+                map.setView([data.lat, data.lon]);
+            }
+        };
+    </script>
+</body>
+</html>

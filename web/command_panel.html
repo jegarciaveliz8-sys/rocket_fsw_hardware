@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Command & FDIR</title>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #f87171; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
+        .nav-links a.active { color: #f87171; border-bottom: 2px solid #f87171; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        button { background: #dc2626; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 6px; font-family: monospace; font-weight: bold; }
+        button:hover { background: #b91c1c; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command" class="active">⚠️ Command & FDIR</a>
+        <a href="/engineering">🛠️ Engineering</a>
+    </div>
+
+    <h1>⚠️ ODYSSEY-1 // GCS Command & FDIR Matrix</h1>
+
+    <div class="card">
+        <h3>Estado de Subsistemas (HIL)</h3>
+        <p>Aviónica: <span style="color: #4ade80;">NOMINAL</span></p>
+        <p>Propulsión: <span style="color: #4ade80;">ARMED</span></p>
+        <p>Ruedas Inerciales: <span style="color: #4ade80;">ACTIVE</span></p>
+    </div>
+
+    <div class="card">
+        <h3>Protocolos de Emergencia & Override</h3>
+        <button onclick="triggerAbort()">EJECUTAR ABORT / SAFE MODE</button>
+    </div>
+
+    <script>
+        function triggerAbort() {
+            fetch('/api/mission/abort', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => alert('🚨 ' + data.message))
+                .catch(err => alert('Error al ejecutar Abort'));
+        }
+    </script>
+</body>
+</html>

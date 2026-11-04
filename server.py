@@ -93,17 +93,33 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2) * math.sin(dlambda/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-@app.get("/")
-def read_root():
-    return {"version": "1.3.0", "status": "nominal", "system": "ODYSSEY-1 GCS"}
+# =========================================================================
+# RUTAS DE MULTIPANELES (Vistas Web Independientes)
+# =========================================================================
 
-@app.get("/dashboard", response_class=HTMLResponse)
-def get_dashboard():
-    html_path = os.path.join(BASE_DIR, "web", "flight_dashboard.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
+@app.get("/", response_class=HTMLResponse)
+def get_flight_deck():
+    path = os.path.join(BASE_DIR, "web", "flight_deck.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
             return f.read()
-    return "<html><body><h1>ODYSSEY-1 GCS - Mission Control Center</h1></body></html>"
+    return "<h1>Flight Deck no encontrado</h1>"
+
+@app.get("/command", response_class=HTMLResponse)
+def get_command_panel():
+    path = os.path.join(BASE_DIR, "web", "command_panel.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Command Panel no encontrado</h1>"
+
+@app.get("/engineering", response_class=HTMLResponse)
+def get_engineering_console():
+    path = os.path.join(BASE_DIR, "web", "engineering.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Engineering Console no encontrado</h1>"
 
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):

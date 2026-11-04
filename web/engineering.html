@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Engineering Console</title>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
+        .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        pre { background: #000; padding: 15px; color: #4ade80; border-radius: 6px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command & FDIR</a>
+        <a href="/engineering" class="active">🛠️ Engineering</a>
+    </div>
+
+    <h1>🛠️ ODYSSEY-1 // Engineering & Dev Console</h1>
+
+    <div class="card">
+        <h3>Inspector CCSDS Crudo & Telemetría en Vivo</h3>
+        <pre id="ccsds">Esperando trama CCSDS...</pre>
+    </div>
+
+    <div class="card">
+        <h3>Copiloto AI (Gemini FSW)</h3>
+        <p id="ai-status">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</p>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.ccsds_frame) {
+                document.getElementById('ccsds').innerText = data.ccsds_frame;
+            }
+        };
+    </script>
+</body>
+</html>

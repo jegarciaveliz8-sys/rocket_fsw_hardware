@@ -12,7 +12,6 @@ def get_recorded_sessions():
     conn = sqlite3.connect("odyssey_telemetry.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    # Consulta segura utilizando las columnas estándar de flight_logs
     cursor.execute("SELECT id, timestamp, flight_time, altitude, velocity, status FROM flight_logs ORDER BY id ASC")
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -37,12 +36,17 @@ def get_mission_anomalies():
     }
 
 @router.websocket("/ws/stream")
-async def websocket_replay_stream(websocket: WebSocket, speed: float = 1.0):
+async def websocket_replay_stream(websocket: WebSocket, speed: float = 1.0, session_id: int = None):
     await websocket.accept()
     conn = sqlite3.connect("odyssey_telemetry.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM flight_logs ORDER BY id ASC")
+    
+    if session_id:
+        cursor.execute("SELECT * FROM flight_logs WHERE id = ? ORDER BY id ASC", (session_id,))
+    else:
+        cursor.execute("SELECT * FROM flight_logs ORDER BY id ASC")
+        
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
 

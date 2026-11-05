@@ -9,6 +9,7 @@ import hmac
 import math
 import uvicorn
 
+from routers import pdf_reports, telemetry_mqtt
 from routers import (
     mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, 
     blackbox, commands_api, mission_path, fault_injection, mission_planner, 
@@ -56,40 +57,42 @@ def direct_abort_mission():
 # =========================================================================
 # REGISTRO DE ROUTERS MODULARES
 # =========================================================================
-app.include_router(mission_api.router)
-app.include_router(subsystems_api.router)
-app.include_router(ai_copilot.router)
-app.include_router(dji_bridge.router)
-app.include_router(commands_api.router)
-app.include_router(fault_injection.router)
-app.include_router(mission_planner.router)
-app.include_router(stations_api.router)
-app.include_router(mission_uplink.router)
-app.include_router(auth_manager.router)
-app.include_router(dsn_network.router)
-app.include_router(mission.router)
-app.include_router(orbit_math.router)
-app.include_router(telemetry_export.router)
-app.include_router(timeline.router)
-app.include_router(video_feed.router)
-app.include_router(network_sim.router)
-app.include_router(security.router)
-app.include_router(timeseries.router)
-app.include_router(swarm.router)
-app.include_router(tactical.router)
-app.include_router(hil.router)
-app.include_router(auth.router)
-app.include_router(dvr.router)
-app.include_router(reports.router)
-app.include_router(field_assistant.router)
-app.include_router(payload_science.router)
-app.include_router(weather.router)
-app.include_router(fdir.router)
-app.include_router(audit.router)
-app.include_router(replay.router)
-app.include_router(blackbox_replay.router)
-app.include_router(monte_carlo.router)
-app.include_router(replay_engine.router)
+    app.include_router(pdf_reports.router)
+    app.include_router(telemetry_mqtt.router)
+    app.include_router(mission_api.router)
+    app.include_router(subsystems_api.router)
+    app.include_router(ai_copilot.router)
+    app.include_router(dji_bridge.router)
+    app.include_router(commands_api.router)
+    app.include_router(fault_injection.router)
+    app.include_router(mission_planner.router)
+    app.include_router(stations_api.router)
+    app.include_router(mission_uplink.router)
+    app.include_router(auth_manager.router)
+    app.include_router(dsn_network.router)
+    app.include_router(mission.router)
+    app.include_router(orbit_math.router)
+    app.include_router(telemetry_export.router)
+    app.include_router(timeline.router)
+    app.include_router(video_feed.router)
+    app.include_router(network_sim.router)
+    app.include_router(security.router)
+    app.include_router(timeseries.router)
+    app.include_router(swarm.router)
+    app.include_router(tactical.router)
+    app.include_router(hil.router)
+    app.include_router(auth.router)
+    app.include_router(dvr.router)
+    app.include_router(reports.router)
+    app.include_router(field_assistant.router)
+    app.include_router(payload_science.router)
+    app.include_router(weather.router)
+    app.include_router(fdir.router)
+    app.include_router(audit.router)
+    app.include_router(replay.router)
+    app.include_router(blackbox_replay.router)
+    app.include_router(monte_carlo.router)
+    app.include_router(replay_engine.router)
 
 BASE_LAT, BASE_LON = 14.7883, -90.1988
 
@@ -253,3 +256,18 @@ def get_replay_panel():
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>Replay Panel no encontrado</h1>"
+
+
+@app.get("/api/replay/sessions")
+def get_replay_sessions():
+    import sqlite3
+    try:
+        conn = sqlite3.connect("odyssey_telemetry.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, timestamp, flight_time, altitude, velocity, status FROM flight_logs ORDER BY id DESC LIMIT 100")
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return {"frames": rows}
+    except Exception as e:
+        return {"frames": [], "error": str(e)}

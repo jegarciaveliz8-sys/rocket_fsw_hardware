@@ -1,3 +1,4 @@
+from database import init_db, log_telemetry
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,11 +16,17 @@ from routers import (
     mission, orbit_math, telemetry_export, timeline, video_feed,
     network_sim, security, timeseries, swarm, tactical, hil, auth,
     dvr, reports, field_assistant, payload_science, weather, fdir,
-    audit, replay, blackbox_replay, monte_carlo
+    audit, replay, blackbox_replay, monte_carlo, replay_engine
 )
 from routers.stations_api import get_active_station_telemetry
 
 app = FastAPI(title="ODYSSEY-1 Modular Mission Control Center", version="1.3.0")
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
+    print("✅ Base de datos de telemetría (odyssey_telemetry.db) inicializada.")
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 web_dir = os.path.join(BASE_DIR, "web")
@@ -82,6 +89,7 @@ app.include_router(audit.router)
 app.include_router(replay.router)
 app.include_router(blackbox_replay.router)
 app.include_router(monte_carlo.router)
+app.include_router(replay_engine.router)
 
 BASE_LAT, BASE_LON = 14.7883, -90.1988
 
@@ -203,6 +211,7 @@ async def websocket_telemetry(websocket: WebSocket):
             active_alerts = alerts_engine.check_telemetry_alerts(telemetry_packet)
             telemetry_packet["alerts"] = active_alerts
 
+            log_telemetry(telemetry_packet)
             await websocket.send_json(telemetry_packet)
             await asyncio.sleep(1)
     except WebSocketDisconnect:
@@ -235,3 +244,12 @@ def get_montecarlo_panel():
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>Monte Carlo Panel no encontrado</h1>"
+
+
+@app.get("/replay", response_class=HTMLResponse)
+def get_replay_panel():
+    path = os.path.join(BASE_DIR, "web", "replay.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Replay Panel no encontrado</h1>"

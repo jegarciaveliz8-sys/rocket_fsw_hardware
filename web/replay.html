@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Flight Replay & Audit</title>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85em; }
+        th, td { border: 1px solid #374151; padding: 8px; text-align: left; }
+        th { background: #1f2937; color: #fbbf24; }
+        button { background: #0284c7; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #0369a1; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command</a>
+        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit">🛰️ Orbit</a>
+        <a href="/payload">🔬 Payload</a>
+        <a href="/montecarlo">📊 Monte Carlo</a>
+        <a href="/replay" class="active">📼 Replay Audit</a>
+    </div>
+    <h1>📼 ODYSSEY-1 // Historial de Vuelos y Auditoría Post-Vuelo</h1>
+    <div class="card">
+        <h3>Sesiones Registradas en SQLite</h3>
+        <button onclick="loadSessionLogs()">🔄 Cargar Registros de Vuelo</button>
+        <table id="logs-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tiempo de Vuelo (s)</th>
+                    <th>Altitud (m)</th>
+                    <th>Velocidad (m/s)</th>
+                    <th>Estado</th>
+                    <th>Timestamp UTC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="6" style="text-align: center; color: #94a3b8;">Haz clic en cargar para ver los datos guardados.</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <script>
+        async function loadSessionLogs() {
+            try {
+                const response = await fetch('/api/replay/sessions');
+                const data = await response.json();
+                const tbody = document.querySelector('#logs-table tbody');
+                tbody.innerHTML = '';
+                
+                if (data.frames && data.frames.length > 0) {
+                    data.frames.slice(-50).reverse().forEach(row => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${row.id}</td>
+                                <td>${row.flight_time}s</td>
+                                <td>${row.altitude}m</td>
+                                <td>${row.velocity}m/s</td>
+                                <td style="color: #4ade80;">${row.status}</td>
+                                <td>${row.timestamp}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No hay registros de vuelo aún. Corre una simulación primero.</td></tr>`;
+                }
+            } catch (err) {
+                console.error("Error al cargar registros:", err);
+                alert("❌ Error al conectar con el endpoint de replay.");
+            }
+        }
+    </script>
+</body>
+</html>

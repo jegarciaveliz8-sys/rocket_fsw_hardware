@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Monte Carlo Dispersion</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #fbbf24; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        .nav-links a.active { color: #fbbf24; border-bottom: 2px solid #fbbf24; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        button { background: #d97706; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; font-family: monospace; }
+        button:hover { background: #b45309; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command</a>
+        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit">🛰️ Orbit</a>
+        <a href="/payload">🔬 Payload</a>
+        <a href="/montecarlo" class="active">📊 Monte Carlo</a>
+    </div>
+    <h1>📊 ODYSSEY-1 // Monte Carlo Stochastic HIL Simulation</h1>
+    <div class="grid">
+        <div class="card">
+            <h3>Parámetros de Dispersión Estocástica</h3>
+            <p>Iteraciones de Vuelo (Corridas): <span style="color:#00ffcc;">500 Runs</span></p>
+            <p>Varianza de Viento (Sanarate): <span style="color:#00ffcc;">± 3.5 m/s (Gaussian)</span></p>
+            <p>Incertidumbre de Empuje (Isp): <span style="color:#00ffcc;">± 1.8 %</span></p>
+            <br>
+            <button onclick="alert('Simulación Monte Carlo iniciada en backend HIL.')">Ejecutar 500 Corridas Estocásticas</button>
+        </div>
+        <div class="card">
+            <h3>Dispersión de Zona de Impacto</h3>
+            <canvas id="mcChart" height="150"></canvas>
+        </div>
+    </div>
+    <script>
+        const ctx = document.getElementById('mcChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Impact Dispersion (Lat/Lon offset)',
+                    data: [{x: 0.1, y: 0.2}, {x: -0.15, y: 0.05}, {x: 0.05, y: -0.1}, {x: -0.05, y: -0.15}, {x: 0.2, y: -0.05}],
+                    backgroundColor: '#fbbf24'
+                }]
+            },
+            options: { responsive: true }
+        });
+    </script>
+</body>
+</html>

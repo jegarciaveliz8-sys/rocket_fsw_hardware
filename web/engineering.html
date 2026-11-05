@@ -9,14 +9,20 @@
         .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
         .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
-        pre { background: #000; padding: 15px; color: #4ade80; border-radius: 6px; overflow-x: auto; }
+        pre { background: #000; padding: 15px; color: #4ade80; border-radius: 6px; overflow-x: auto; font-size: 0.9em; }
+        textarea { width: 100%; background: #1f2937; color: #00ffcc; border: 1px solid #374151; padding: 10px; border-radius: 4px; font-family: monospace; }
+        button { background: #0284c7; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-family: monospace; margin-top: 10px; font-weight: bold; }
+        button:hover { background: #0369a1; }
     </style>
 </head>
 <body>
-    <div class="nav-links">
+        <div class="nav-links">
         <a href="/">🚀 Flight Deck</a>
-        <a href="/command">⚠️ Command & FDIR</a>
-        <a href="/engineering" class="active">🛠️ Engineering</a>
+        <a href="/command">⚠️ Command</a>
+        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit">🛰️ Orbit</a>
+        <a href="/payload">🔬 Payload</a>
+        <a href="/montecarlo">📊 Monte Carlo</a>
     </div>
 
     <h1>🛠️ ODYSSEY-1 // Engineering & Dev Console</h1>
@@ -28,7 +34,10 @@
 
     <div class="card">
         <h3>Copiloto AI (Gemini FSW)</h3>
-        <p id="ai-status">[AI] Copiloto conectado a Gemini. Listo para diagnósticos.</p>
+        <p>[AI] Copiloto conectado a la base de Sanarate. Ingrese consulta diagnóstica:</p>
+        <textarea id="ai-prompt" rows="2" placeholder="Ej: Analizar estado de presión de cámara..."></textarea>
+        <button onclick="queryAI()">Enviar a Copiloto AI</button>
+        <pre id="ai-response" style="margin-top: 10px; color: #38bdf8;">Respuesta del Copiloto aparecerá aquí...</pre>
     </div>
 
     <script>
@@ -36,9 +45,25 @@
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             if (data.ccsds_frame) {
-                document.getElementById('ccsds').innerText = data.ccsds_frame;
+                document.getElementById('ccsds').innerText = JSON.stringify(data, null, 2);
             }
         };
+
+        function queryAI() {
+            const prompt = document.getElementById('ai-prompt').value;
+            fetch('/ai/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('ai-response').innerText = data.response;
+            })
+            .catch(err => {
+                document.getElementById('ai-response').innerText = "Error al conectar con el Copiloto AI.";
+            });
+        }
     </script>
 </body>
 </html>

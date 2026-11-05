@@ -8,30 +8,55 @@
         .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
         .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
         .nav-links a.active { color: #f87171; border-bottom: 2px solid #f87171; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
-        button { background: #dc2626; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 6px; font-family: monospace; font-weight: bold; }
+        button { background: #dc2626; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 6px; font-family: monospace; font-weight: bold; margin-top: 5px; width: 100%; }
         button:hover { background: #b91c1c; }
+        .btn-sub { background: #374151; margin-bottom: 8px; }
+        .btn-sub:hover { background: #4b5563; }
+        .alert-box { background: #450a0a; border: 1px solid #ef4444; padding: 10px; border-radius: 4px; color: #fca5a5; font-size: 0.9em; max-height: 120px; overflow-y: auto; }
     </style>
 </head>
 <body>
-    <div class="nav-links">
+        <div class="nav-links">
         <a href="/">🚀 Flight Deck</a>
-        <a href="/command" class="active">⚠️ Command & FDIR</a>
+        <a href="/command">⚠️ Command</a>
         <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit">🛰️ Orbit</a>
+        <a href="/payload">🔬 Payload</a>
+        <a href="/montecarlo">📊 Monte Carlo</a>
     </div>
 
     <h1>⚠️ ODYSSEY-1 // GCS Command & FDIR Matrix</h1>
 
-    <div class="card">
-        <h3>Estado de Subsistemas (HIL)</h3>
-        <p>Aviónica: <span style="color: #4ade80;">NOMINAL</span></p>
-        <p>Propulsión: <span style="color: #4ade80;">ARMED</span></p>
-        <p>Ruedas Inerciales: <span style="color: #4ade80;">ACTIVE</span></p>
-    </div>
-
-    <div class="card">
-        <h3>Protocolos de Emergencia & Override</h3>
-        <button onclick="triggerAbort()">EJECUTAR ABORT / SAFE MODE</button>
+    <div class="grid">
+        <div>
+            <div class="card">
+                <h3>Estado de Subsistemas & Red DSN (HIL)</h3>
+                <p>Aviónica: <span style="color: #4ade80;">NOMINAL</span></p>
+                <p>Propulsión: <span style="color: #4ade80;">ARMED</span></p>
+                <p>Red DSN Activa: <span id="dsn-station" style="color: #38bdf8;">Madrid (DSS-63)</span></p>
+                <p>SNR: <span id="snr" style="color: #4ade80;">24.5 dB</span></p>
+                <p>Estado RF: <span id="blackout-status" style="color: #4ade80;">SOURCE: ACTIVE_MONITORING</span></p>
+            </div>
+            <div class="card">
+                <h3>Protocolos de Emergencia & Override</h3>
+                <button onclick="triggerAbort()">🚨 EJECUTAR ABORT / SAFE MODE (RTL)</button>
+            </div>
+        </div>
+        <div>
+            <div class="card">
+                <h3>Inyección de Fallos (FDIR Testing)</h3>
+                <p>Pruebas de resiliencia del sistema de vuelo:</p>
+                <button class="btn-sub" onclick="injectFault('low_battery_spike')">⚡ Simular Batería Crítica</button>
+                <button class="btn-sub" onclick="injectFault('rf_blackout')">📡 Simular Pérdida RF (Blackout)</button>
+                <button class="btn-sub" onclick="injectFault('gps_failure')">🛰️ Simular Falla GPS (No Fix)</button>
+            </div>
+            <div class="card">
+                <h3>🚨 Registro de Alertas FDIR en Vivo</h3>
+                <div id="alerts-container" class="alert-box">Sin alertas activas. Sistema nominal.</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -41,6 +66,44 @@
                 .then(data => alert('🚨 ' + data.message))
                 .catch(err => alert('Error al ejecutar Abort'));
         }
+
+        function injectFault(faultType) {
+            fetch(`/api/faults/inject`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fault: faultType, active: true })
+            })
+            .then(res => res.json())
+            .then(data => alert('⚡ Comando de inyección enviado: ' + faultType))
+            .catch(err => alert('Fallo inyectado en HIL'));
+        }
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.dsn_station) {
+                document.getElementById('dsn_station').innerText = data.dsn_station;
+            }
+            if (data.snr) {
+                document.getElementById('snr').innerText = data.snr + ' dB';
+            }
+            if (data.blackout_status) {
+                const bElem = document.getElementById('blackout-status');
+                bElem.innerText = data.blackout_status;
+                bElem.style.color = data.blackout_status.includes('WARNING') ? '#f87171' : '#4ade80';
+            }
+            
+            // Actualizar alertas FDIR
+            if (data.alerts && data.alerts.length > 0) {
+                let html = '';
+                data.alerts.forEach(alert => {
+                    html += `<div>[${alert.level}] ${alert.message}</div>`;
+                });
+                document.getElementById('alerts-container').innerHTML = html;
+            } else {
+                document.getElementById('alerts-container').innerHTML = 'Sin alertas activas. Sistema nominal.';
+            }
+        };
     </script>
 </body>
 </html>

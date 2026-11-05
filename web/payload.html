@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Payload & AI Science</title>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #a78bfa; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        .nav-links a.active { color: #a78bfa; border-bottom: 2px solid #a78bfa; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        .ai-log { background: #000; padding: 12px; color: #34d399; border-radius: 6px; font-size: 0.9em; height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command</a>
+        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit">🛰️ Orbit</a>
+        <a href="/payload" class="active">🔬 Payload</a>
+        <a href="/montecarlo">📊 Monte Carlo</a>
+    </div>
+    <h1>🔬 ODYSSEY-1 // Payload Science & Local AI Vision (phi3)</h1>
+    <div class="grid">
+        <div class="card">
+            <h3>Sensores Científicos Activos</h3>
+            <p>Espectrómetro UV/IR: <span style="color: #4ade80;">CALIBRADO (Nominal)</span></p>
+            <p>Termopar de Placa Térmica: <span style="color: #38bdf8;">42.8 °C</span></p>
+            <p>Contador de Partículas Cósmicas: <span style="color: #38bdf8;">0.14 c/s</span></p>
+        </div>
+        <div class="card">
+            <h3>Inferencia de IA Local (Ollama / phi3)</h3>
+            <div class="ai-log">
+[14:02:11] [OLLAMA] Modelo phi3 inicializado en backend.
+[14:02:15] [VISION] Analizando telemetría multiespectral de carga útil...
+[14:02:20] [STATUS] Anormalidades térmicas descartadas. Estructura estable.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

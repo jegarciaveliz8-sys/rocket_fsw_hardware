@@ -210,3 +210,28 @@ async def websocket_telemetry(websocket: WebSocket):
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+
+
+@app.get("/orbit", response_class=HTMLResponse)
+def get_orbit_panel():
+    path = os.path.join(BASE_DIR, "web", "orbit.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Orbit Panel no encontrado</h1>"
+
+@app.get("/payload", response_class=HTMLResponse)
+def get_payload_panel():
+    path = os.path.join(BASE_DIR, "web", "payload.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Payload Panel no encontrado</h1>"
+
+@app.get("/montecarlo", response_class=HTMLResponse)
+def get_montecarlo_panel():
+    path = os.path.join(BASE_DIR, "web", "montecarlo.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Monte Carlo Panel no encontrado</h1>"

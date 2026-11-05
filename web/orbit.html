@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ODYSSEY-1 | Orbit & Trajectory</title>
+    <style>
+        body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
+        .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
+        .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        .metric-value { font-size: 1.3em; color: #00ffcc; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="nav-links">
+        <a href="/">🚀 Flight Deck</a>
+        <a href="/command">⚠️ Command</a>
+        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/orbit" class="active">🛰️ Orbit</a>
+        <a href="/payload">🔬 Payload</a>
+        <a href="/montecarlo">📊 Monte Carlo</a>
+    </div>
+    <h1>🛰️ ODYSSEY-1 // Orbital Mechanics & TLE Propagation</h1>
+    <div class="grid">
+        <div class="card">
+            <h3>Elementos Keplerianos & Estado LEO</h3>
+            <p>Semieje Mayor (a): <span class="metric-value">6878.14 km</span></p>
+            <p>Excentricidad (e): <span class="metric-value">0.00124</span></p>
+            <p>Inclinación Orbital: <span class="metric-value">28.5°</span></p>
+            <p>Período Orbital: <span class="metric-value">94.2 min</span></p>
+        </div>
+        <div class="card">
+            <h3>Propagador de Perturbaciones</h3>
+            <p>Modelo Gravitacional: <span style="color: #4ade80;">J2 / J4 Active</span></p>
+            <p>Corrección Atmosférica (Drag): <span style="color: #4ade80;">NRLMSISE-00 Synchronized</span></p>
+            <p>Próximo Pasaje Sanarate (Cenit): <span style="color: #38bdf8;">T+ 04h 12m 33s</span></p>
+        </div>
+    </div>
+</body>
+</html>

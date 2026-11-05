@@ -4,21 +4,25 @@
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | Flight Replay & Audit</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
         .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
         .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
         .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
-        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85em; }
         th, td { border: 1px solid #374151; padding: 8px; text-align: left; }
         th { background: #1f2937; color: #fbbf24; }
         button { background: #0284c7; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #0369a1; }
+        select { background: #1f2937; color: #38bdf8; border: 1px solid #374151; padding: 7px; border-radius: 4px; font-weight: bold; }
         .telemetry-live { font-size: 1.2em; color: #4ade80; font-weight: bold; }
         .anomaly-badge { background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+        #map { height: 350px; border-radius: 6px; border: 1px solid #374151; }
     </style>
 </head>
 <body>
@@ -38,6 +42,13 @@
         <div class="controls">
             <button onclick="startReplayStream()">▶ Iniciar Reproducción</button>
             <button onclick="stopReplayStream()" style="background: #ef4444;">⏹ Detener</button>
+            <label for="speed-select" style="color: #94a3b8; font-size: 0.9em; margin-left: 10px;">Velocidad:</label>
+            <select id="speed-select">
+                <option value="1">1x (Normal)</option>
+                <option value="2">2x (Rápido)</option>
+                <option value="5">5x (Turbo)</option>
+                <option value="10">10x (Máximo)</option>
+            </select>
             <a href="/api/replay/export/csv" style="text-decoration: none;"><button style="background: #10b981;">📥 Descargar CSV</button></a>
             <button onclick="checkAnomalies()" style="background: #f59e0b;">🚨 Buscar Anomalías</button>
         </div>
@@ -54,6 +65,11 @@
             <h3>Curva de Velocidad Histórica (m/s)</h3>
             <canvas id="velocityChart"></canvas>
         </div>
+    </div>
+
+    <div class="card">
+        <h3>Trayectoria GIS en Tiempo Real (Sanarate Ground Station)</h3>
+        <div id="map"></div>
     </div>
 
     <div class="card">
@@ -79,6 +95,8 @@
     <script>
         let ws = null;
         let altChart, velChart;
+        let map, rocketMarker, polyline;
+        let flightPathCoords = [];
 
         function initCharts() {
             const ctxAlt = document.getElementById("altitudeChart").getContext("2d");
@@ -94,6 +112,18 @@
                 data: { labels: [], datasets: [{ label: "Velocidad (m/s)", data: [], borderColor: "#4ade80", backgroundColor: "rgba(74,222,128,0.1)", fill: true, tension: 0.2 }] },
                 options: { responsive: true, scales: { x: { ticks: { color: "#94a3b8" } }, y: { ticks: { color: "#94a3b8" } } } }
             });
+        }
+
+        function initMap() {
+            map = L.map("map").setView([14.7833, -90.1167], 14);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: "© OpenStreetMap contributors"
+            }).addTo(map);
+
+            rocketMarker = L.marker([14.7833, -90.1167]).addTo(map)
+                .bindPopup("ODYSSEY-1 Position");
+            polyline = L.polyline([], {color: "#38bdf8", weight: 4}).addTo(map);
         }
 
         async function loadSessionLogs() {
@@ -140,11 +170,14 @@
             if (ws) ws.close();
             altChart.data.labels = []; altChart.data.datasets[0].data = []; altChart.update();
             velChart.data.labels = []; velChart.data.datasets[0].data = []; velChart.update();
+            flightPathCoords = [];
+            polyline.setLatLngs([]);
 
+            const speed = document.getElementById("speed-select").value;
             const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-            ws = new WebSocket(`${protocol}//${window.location.host}/api/replay/ws/stream`);
+            ws = new WebSocket(`${protocol}//${window.location.host}/api/replay/ws/stream?speed=${speed}`);
             
-            document.getElementById("replay-status").innerText = "STREAMING ACTIVE";
+            document.getElementById("replay-status").innerText = `STREAMING ACTIVE (${speed}x)`;
 
             ws.onmessage = function(event) {
                 const packet = JSON.parse(event.data);
@@ -164,10 +197,22 @@
                 velChart.data.labels.push(tLabel);
                 velChart.data.datasets[0].data.push(packet.velocity);
                 velChart.update();
+
+                const lat = packet.latitude || (14.7833 + ((packet.flight_time || 0) * 0.0001));
+                const lng = packet.longitude || (-90.1167 + ((packet.flight_time || 0) * 0.0001));
+                const latLng = [lat, lng];
+
+                rocketMarker.setLatLng(latLng);
+                rocketMarker.bindPopup(`ODYSSEY-1 (${speed}x)<br>Alt: ${packet.altitude}m<br>Vel: ${packet.velocity}m/s`);
+                flightPathCoords.push(latLng);
+                polyline.setLatLngs(flightPathCoords);
+                map.panTo(latLng);
             };
 
             ws.onclose = function() {
-                document.getElementById("replay-status").innerText = "DISCONNECTED";
+                if (document.getElementById("replay-status").innerText.includes("ACTIVE")) {
+                    document.getElementById("replay-status").innerText = "DISCONNECTED";
+                }
             };
         }
 
@@ -178,6 +223,7 @@
 
         window.onload = function() {
             initCharts();
+            initMap();
             loadSessionLogs();
         };
     </script>

@@ -9,10 +9,10 @@ router = APIRouter(prefix="/api/replay", tags=["Flight Replay"])
 
 @router.get("/sessions")
 def get_recorded_sessions():
-    """Obtiene un resumen de los paquetes grabados disponibles para reproducción."""
     conn = sqlite3.connect("odyssey_telemetry.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    # Consulta segura utilizando las columnas estándar de flight_logs
     cursor.execute("SELECT id, timestamp, flight_time, altitude, velocity, status FROM flight_logs ORDER BY id ASC")
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -24,7 +24,6 @@ def get_recorded_sessions():
 
 @router.get("/anomalies")
 def get_mission_anomalies():
-    """Filtra y devuelve todos los paquetes que contengan eventos FDIR o alertas críticas."""
     conn = sqlite3.connect("odyssey_telemetry.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -38,8 +37,7 @@ def get_mission_anomalies():
     }
 
 @router.websocket("/ws/stream")
-async def websocket_replay_stream(websocket: WebSocket):
-    """Transmite los paquetes de telemetría históricos segundo a segundo."""
+async def websocket_replay_stream(websocket: WebSocket, speed: float = 1.0):
     await websocket.accept()
     conn = sqlite3.connect("odyssey_telemetry.db")
     conn.row_factory = sqlite3.Row
@@ -48,17 +46,18 @@ async def websocket_replay_stream(websocket: WebSocket):
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
+    delay = max(0.05, 1.0 / max(0.1, speed))
+
     try:
         for row in rows:
             await websocket.send_json(dict(row))
-            await asyncio.sleep(1)
+            await asyncio.sleep(delay)
         await websocket.send_json({"status": "REPLAY_COMPLETE"})
     except WebSocketDisconnect:
         pass
 
 @router.get("/export/csv")
 def export_mission_logs():
-    """Exporta todos los registros de vuelo en formato CSV para análisis externo."""
     conn = sqlite3.connect("odyssey_telemetry.db")
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM flight_logs ORDER BY id ASC")

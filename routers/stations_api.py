@@ -47,3 +47,11 @@ def get_active_station_telemetry():
         "snr": round(active_info["snr"] + random.uniform(-0.3, 0.3), 1),
         "stations_status": stations_state
     }
+
+def get_dynamic_dsn_station(distance_m: float = 0.0):
+    if distance_m < 2000:
+        return {"dsn_station": "Sanarate Local Tracker (SLT-1)", "snr": 45.2, "stations_status": "LOCAL_LOCKED"}
+    elif distance_m < 8000:
+        return {"dsn_station": "Madrid DSS-63 (Handoff)", "snr": 31.8, "stations_status": "GLOBAL_TRACKING"}
+    else:
+        return {"dsn_station": "Goldstone DSS-14 (Deep Space)", "snr": 18.4, "stations_status": "DEEP_SPACE_LINK"}

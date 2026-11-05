@@ -125,7 +125,7 @@
             document.getElementById('yaw').innerText = data.yaw + '°';
             document.getElementById('status-text').innerText = data.status;
             if (data.dsn_station) {
-                document.getElementById('dsn_station').innerText = data.dsn_station;
+                document.getElementById('dsn-station').innerText = data.dsn_station;
             }
 
             if (data.lat && data.lon) {
@@ -144,10 +144,18 @@
         };
 
         function triggerLaunch() {
-            fetch('/api/mission/start', { method: 'POST' })
-                .then(res => res.json())
-                .then(data => alert('🚀 Secuencia de lanzamiento iniciada'))
-                .catch(err => alert('Comando enviado'));
+            fetch('/api/mission/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    waypoints: [
+                        { lat: 14.7900, lon: -90.2000, alt: 100.0, loiter: 15, name: 'UI-Waypoint' }
+                    ]
+                })
+            })
+            .then(res => res.json())
+            .then(data => alert('🚀 ' + (data.message || 'Misión iniciada')))
+            .catch(err => alert('Error al iniciar misión'));
         }
 
         function triggerAbort() {

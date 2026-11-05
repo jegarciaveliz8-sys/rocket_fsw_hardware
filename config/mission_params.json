@@ -1,0 +1,28 @@
+{
+    "mission_name": "ODYSSEY-1 Sanarate HIL",
+    "base_coordinates": {
+        "lat": 14.7883,
+        "lon": -90.1988
+    },
+    "dsn_handoff_thresholds": {
+        "local_max_m": 2000.0,
+        "deep_space_min_m": 8000.0
+    },
+    "substations_nominal_limits": {
+        "SUB-01": {
+            "name": "Sanarate Primary Grid",
+            "voltage_kv": 13.8,
+            "max_load_pct": 85.0
+        },
+        "SUB-02": {
+            "name": "Telemetry Ground Relay",
+            "voltage_kv": 4.16,
+            "max_load_pct": 80.0
+        },
+        "SUB-03": {
+            "name": "DSN Uplink Power Station",
+            "voltage_kv": 23.0,
+            "max_load_pct": 90.0
+        }
+    }
+}

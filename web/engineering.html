@@ -1,70 +1,77 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | Engineering Console</title>
     <style>
-        body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
+        body { font-family: monospace; background: #0b0f19; color: #00ffcc; margin: 0; padding: 20px; }
         .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
         .nav-links a { color: #38bdf8; margin-right: 20px; text-decoration: none; font-weight: bold; }
-        .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
-        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
-        pre { background: #000; padding: 15px; color: #4ade80; border-radius: 6px; overflow-x: auto; font-size: 0.9em; }
-        textarea { width: 100%; background: #1f2937; color: #00ffcc; border: 1px solid #374151; padding: 10px; border-radius: 4px; font-family: monospace; }
-        button { background: #0284c7; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-family: monospace; margin-top: 10px; font-weight: bold; }
-        button:hover { background: #0369a1; }
+        .nav-links a.active { color: #00ffcc; border-bottom: 2px solid #00ffcc; }
+        .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .grid-sub { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px; }
     </style>
 </head>
 <body>
-        <div class="nav-links">
+    <div class="nav-links">
         <a href="/">🚀 Flight Deck</a>
         <a href="/command">⚠️ Command</a>
-        <a href="/engineering">🛠️ Engineering</a>
+        <a href="/engineering" class="active">🛠️ Engineering</a>
         <a href="/orbit">🛰️ Orbit</a>
         <a href="/payload">🔬 Payload</a>
         <a href="/montecarlo">📊 Monte Carlo</a>
-            <a href="/replay">📼 Replay Audit</a>
+        <a href="/replay">📼 Replay Audit</a>
     </div>
 
-    <h1>🛠️ ODYSSEY-1 // Engineering & Dev Console</h1>
+    <h1>🛠️ ODYSSEY-1 // Engineering & Substations Console</h1>
 
     <div class="card">
-        <h3>Inspector CCSDS Crudo & Telemetría en Vivo</h3>
-        <pre id="ccsds">Esperando trama CCSDS...</pre>
+        <h3 style="color: #00ffcc;">⚡ Estado de Subestaciones & Red de Tierra (Sanarate)</h3>
+        <div id="substations-container" class="grid-sub">
+            <!-- Carga dinámica -->
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Copiloto AI (Gemini FSW)</h3>
-        <p>[AI] Copiloto conectado a la base de Sanarate. Ingrese consulta diagnóstica:</p>
-        <textarea id="ai-prompt" rows="2" placeholder="Ej: Analizar estado de presión de cámara..."></textarea>
-        <button onclick="queryAI()">Enviar a Copiloto AI</button>
-        <pre id="ai-response" style="margin-top: 10px; color: #38bdf8;">Respuesta del Copiloto aparecerá aquí...</pre>
-    </div>
-
-    <script>
-        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.ccsds_frame) {
-                document.getElementById('ccsds').innerText = JSON.stringify(data, null, 2);
-            }
-        };
-
-        function queryAI() {
-            const prompt = document.getElementById('ai-prompt').value;
-            fetch('/ai/query', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: prompt })
-            })
-            .then(res => res.json())
+        <script>
+    function loadSubstations() {
+        fetch("/api/substations/status")
+            .then(response => response.json())
             .then(data => {
-                document.getElementById('ai-response').innerText = data.response;
+                const container = document.getElementById("substations-container");
+                container.innerHTML = "";
+                
+                data.substations.forEach(sub => {
+                    const isNominal = sub.status === "NOMINAL";
+                    const color = isNominal ? "#10b981" : (sub.status.includes("CRITICAL") ? "#dc2626" : "#f59e0b");
+                    container.innerHTML += `
+                        <div style="background: #1f2937; padding: 15px; border-radius: 6px; border-left: 4px solid ${color};">
+                            <strong>${sub.name}</strong><br>
+                            <span style="font-size: 0.9em; color: #9ca3af;">ID: ${sub.id}</span><br>
+                            Voltaje: <span style="color: #38bdf8;">${sub.voltage_kv} kV</span><br>
+                            Carga: <span style="color: #38bdf8;">${sub.load_pct}%</span><br>
+                            Estado: <span style="color: ${color}; font-weight: bold;">${sub.status}</span><br>
+                            <button onclick="toggleSub('${sub.id}')" style="margin-top: 10px; background: #374151; color: #38bdf8; border: 1px solid #4b5563; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8em;">Alternar Estado</button>
+                        </div>
+                    `;
+                });
             })
-            .catch(err => {
-                document.getElementById('ai-response').innerText = "Error al conectar con el Copiloto AI.";
-            });
-        }
+            .catch(err => console.error("Error al cargar subestaciones:", err));
+    }
+
+    function toggleSub(subId) {
+        fetch("/api/substations/toggle", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: subId, action: "toggle" })
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log("Subestación actualizada:", data);
+            loadSubstations();
+        });
+    }
+
+    loadSubstations();
+    setInterval(loadSubstations, 2000);
     </script>
-</body>
-</html>

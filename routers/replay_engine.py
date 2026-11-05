@@ -42,23 +42,27 @@ async def websocket_replay_stream(websocket: WebSocket, speed: float = 1.0, sess
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    if session_id:
-        cursor.execute("SELECT * FROM flight_logs WHERE id = ? ORDER BY id ASC", (session_id,))
-    else:
-        cursor.execute("SELECT * FROM flight_logs ORDER BY id ASC")
-        
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-
-    delay = max(0.05, 1.0 / max(0.1, speed))
-
     try:
+        if session_id:
+            cursor.execute("SELECT * FROM flight_logs WHERE id = ? ORDER BY id ASC", (session_id,))
+        else:
+            cursor.execute("SELECT * FROM flight_logs ORDER BY id ASC")
+            
+        rows = [dict(row) for row in cursor.fetchall()]
+        delay = max(0.05, 1.0 / max(0.1, speed))
+
         for row in rows:
-            await websocket.send_json(dict(row))
+            clean_row = {k: (v if v is not None else 0) for k, v in row.items()}
+            await websocket.send_json(clean_row)
             await asyncio.sleep(delay)
+            
         await websocket.send_json({"status": "REPLAY_COMPLETE"})
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        print(f"❌ Error en streaming WebSocket: {e}")
+    finally:
+        conn.close()
 
 @router.get("/export/csv")
 def export_mission_logs():

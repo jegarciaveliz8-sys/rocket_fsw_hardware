@@ -3,17 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <title>ODYSSEY-1 | Flight Replay & Audit</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: monospace; background: #0b0f19; color: #38bdf8; margin: 0; padding: 20px; }
         .nav-links { margin-bottom: 20px; background: #111827; padding: 10px; border-radius: 6px; }
         .nav-links a { color: #94a3b8; margin-right: 15px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
         .nav-links a.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; }
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85em; }
         th, td { border: 1px solid #374151; padding: 8px; text-align: left; }
         th { background: #1f2937; color: #fbbf24; }
         button { background: #0284c7; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #0369a1; }
+        .telemetry-live { font-size: 1.2em; color: #4ade80; font-weight: bold; }
+        .anomaly-badge { background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -27,14 +32,38 @@
         <a href="/replay" class="active">📼 Replay Audit</a>
     </div>
     <h1>📼 ODYSSEY-1 // Historial de Vuelos y Auditoría Post-Vuelo</h1>
+    
+    <div class="card">
+        <h3>Centro de Reproducción Histórica (HIL Replay)</h3>
+        <div class="controls">
+            <button onclick="startReplayStream()">▶ Iniciar Reproducción</button>
+            <button onclick="stopReplayStream()" style="background: #ef4444;">⏹ Detener</button>
+            <a href="/api/replay/export/csv" style="text-decoration: none;"><button style="background: #10b981;">📥 Descargar CSV</button></a>
+            <button onclick="checkAnomalies()" style="background: #f59e0b;">🚨 Buscar Anomalías</button>
+        </div>
+        <div>Estado: <span id="replay-status" class="telemetry-live">STANDBY</span></div>
+        <p>Altitud Actual: <span id="replay-alt">0.0</span> m | Velocidad: <span id="replay-vel">0.0</span> m/s</p>
+    </div>
+
+    <div class="grid-container">
+        <div class="card">
+            <h3>Curva de Altitud Histórica (m)</h3>
+            <canvas id="altitudeChart"></canvas>
+        </div>
+        <div class="card">
+            <h3>Curva de Velocidad Histórica (m/s)</h3>
+            <canvas id="velocityChart"></canvas>
+        </div>
+    </div>
+
     <div class="card">
         <h3>Sesiones Registradas en SQLite</h3>
-        <button onclick="loadSessionLogs()">🔄 Cargar Registros de Vuelo</button>
+        <button onclick="loadSessionLogs()">🔄 Cargar Registros</button>
         <table id="logs-table">
             <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Tiempo de Vuelo (s)</th>
+                    <th>Tiempo (s)</th>
                     <th>Altitud (m)</th>
                     <th>Velocidad (m/s)</th>
                     <th>Estado</th>
@@ -42,27 +71,49 @@
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="6" style="text-align: center; color: #94a3b8;">Haz clic en cargar para ver los datos guardados.</td></tr>
+                <tr><td colspan="6" style="text-align: center; color: #94a3b8;">Haz clic en cargar para ver los datos.</td></tr>
             </tbody>
         </table>
     </div>
+
     <script>
+        let ws = null;
+        let altChart, velChart;
+
+        function initCharts() {
+            const ctxAlt = document.getElementById("altitudeChart").getContext("2d");
+            altChart = new Chart(ctxAlt, {
+                type: "line",
+                data: { labels: [], datasets: [{ label: "Altitud (m)", data: [], borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,0.1)", fill: true, tension: 0.2 }] },
+                options: { responsive: true, scales: { x: { ticks: { color: "#94a3b8" } }, y: { ticks: { color: "#94a3b8" } } } }
+            });
+
+            const ctxVel = document.getElementById("velocityChart").getContext("2d");
+            velChart = new Chart(ctxVel, {
+                type: "line",
+                data: { labels: [], datasets: [{ label: "Velocidad (m/s)", data: [], borderColor: "#4ade80", backgroundColor: "rgba(74,222,128,0.1)", fill: true, tension: 0.2 }] },
+                options: { responsive: true, scales: { x: { ticks: { color: "#94a3b8" } }, y: { ticks: { color: "#94a3b8" } } } }
+            });
+        }
+
         async function loadSessionLogs() {
             try {
-                const response = await fetch('/api/replay/sessions');
+                const response = await fetch("/api/replay/sessions");
                 const data = await response.json();
-                const tbody = document.querySelector('#logs-table tbody');
-                tbody.innerHTML = '';
+                const tbody = document.querySelector("#logs-table tbody");
+                tbody.innerHTML = "";
                 
                 if (data.frames && data.frames.length > 0) {
                     data.frames.slice(-50).reverse().forEach(row => {
+                        const isAnomaly = row.status.includes("ALERT") || row.status.includes("BREACH") || row.status.includes("ERROR");
+                        const statusCell = isAnomaly ? `<span class="anomaly-badge">${row.status}</span>` : `<span style="color: #4ade80;">${row.status}</span>`;
                         tbody.innerHTML += `
                             <tr>
                                 <td>${row.id}</td>
                                 <td>${row.flight_time}s</td>
                                 <td>${row.altitude}m</td>
                                 <td>${row.velocity}m/s</td>
-                                <td style="color: #4ade80;">${row.status}</td>
+                                <td>${statusCell}</td>
                                 <td>${row.timestamp}</td>
                             </tr>
                         `;
@@ -72,9 +123,63 @@
                 }
             } catch (err) {
                 console.error("Error al cargar registros:", err);
-                alert("❌ Error al conectar con el endpoint de replay.");
             }
         }
+
+        async function checkAnomalies() {
+            try {
+                const response = await fetch("/api/replay/anomalies");
+                const data = await response.json();
+                alert(`🚨 Auditoría de FDIR: Se encontraron ${data.anomalies.length} registros con anomalías críticas.`);
+            } catch (err) {
+                console.error("Error consultando anomalías:", err);
+            }
+        }
+
+        function startReplayStream() {
+            if (ws) ws.close();
+            altChart.data.labels = []; altChart.data.datasets[0].data = []; altChart.update();
+            velChart.data.labels = []; velChart.data.datasets[0].data = []; velChart.update();
+
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            ws = new WebSocket(`${protocol}//${window.location.host}/api/replay/ws/stream`);
+            
+            document.getElementById("replay-status").innerText = "STREAMING ACTIVE";
+
+            ws.onmessage = function(event) {
+                const packet = JSON.parse(event.data);
+                if (packet.status === "REPLAY_COMPLETE") {
+                    document.getElementById("replay-status").innerText = "REPLAY COMPLETE";
+                    ws.close();
+                    return;
+                }
+                const tLabel = `T+${packet.flight_time || packet.time || 0}s`;
+                document.getElementById("replay-alt").innerText = packet.altitude || 0;
+                document.getElementById("replay-vel").innerText = packet.velocity || 0;
+
+                altChart.data.labels.push(tLabel);
+                altChart.data.datasets[0].data.push(packet.altitude);
+                altChart.update();
+
+                velChart.data.labels.push(tLabel);
+                velChart.data.datasets[0].data.push(packet.velocity);
+                velChart.update();
+            };
+
+            ws.onclose = function() {
+                document.getElementById("replay-status").innerText = "DISCONNECTED";
+            };
+        }
+
+        function stopReplayStream() {
+            if (ws) ws.close();
+            document.getElementById("replay-status").innerText = "STOPPED";
+        }
+
+        window.onload = function() {
+            initCharts();
+            loadSessionLogs();
+        };
     </script>
 </body>
 </html>

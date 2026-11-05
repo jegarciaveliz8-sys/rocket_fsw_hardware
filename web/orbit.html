@@ -25,18 +25,30 @@
     <h1>🛰️ ODYSSEY-1 // Orbital Mechanics & TLE Propagation</h1>
     <div class="grid">
         <div class="card">
-            <h3>Elementos Keplerianos & Estado LEO</h3>
-            <p>Semieje Mayor (a): <span class="metric-value">6878.14 km</span></p>
-            <p>Excentricidad (e): <span class="metric-value">0.00124</span></p>
-            <p>Inclinación Orbital: <span class="metric-value">28.5°</span></p>
-            <p>Período Orbital: <span class="metric-value">94.2 min</span></p>
+            <h3>Estado Orbital en Vivo (HIL)</h3>
+            <p>Altitud Actual: <span class="metric-value" id="orbit-alt">0.0 m</span></p>
+            <p>Velocidad Orbital: <span class="metric-value" id="orbit-vel">0.0 m/s</span></p>
+            <p>Lat / Lon: <span class="metric-value" id="orbit-coords">14.7883, -90.1988</span></p>
+            <p>Período Estimado: <span class="metric-value">94.2 min</span></p>
         </div>
         <div class="card">
             <h3>Propagador de Perturbaciones</h3>
             <p>Modelo Gravitacional: <span style="color: #4ade80;">J2 / J4 Active</span></p>
-            <p>Corrección Atmosférica (Drag): <span style="color: #4ade80;">NRLMSISE-00 Synchronized</span></p>
-            <p>Próximo Pasaje Sanarate (Cenit): <span style="color: #38bdf8;">T+ 04h 12m 33s</span></p>
+            <p>Estación DSN: <span id="orbit-dsn" style="color: #38bdf8;">Madrid (DSS-63)</span></p>
+            <p>Estado del Link: <span style="color: #4ade80;">LOCK (Nominal)</span></p>
         </div>
     </div>
+    <script>
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            document.getElementById('orbit-alt').innerText = data.altitude + ' m';
+            document.getElementById('orbit-vel').innerText = data.velocity + ' m/s';
+            document.getElementById('orbit-coords').innerText = `${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`;
+            if (data.dsn_station) {
+                document.getElementById('orbit-dsn').innerText = data.dsn_station;
+            }
+        };
+    </script>
 </body>
 </html>

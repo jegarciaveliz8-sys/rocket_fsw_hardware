@@ -13,6 +13,7 @@
         .card { background: #111827; border: 1px solid #1f2937; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #e5e7eb; }
         button { background: #d97706; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; font-family: monospace; }
         button:hover { background: #b45309; }
+        .metric-val { color: #00ffcc; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -28,11 +29,12 @@
     <div class="grid">
         <div class="card">
             <h3>Parámetros de Dispersión Estocástica</h3>
-            <p>Iteraciones de Vuelo (Corridas): <span style="color:#00ffcc;">500 Runs</span></p>
-            <p>Varianza de Viento (Sanarate): <span style="color:#00ffcc;">± 3.5 m/s (Gaussian)</span></p>
-            <p>Incertidumbre de Empuje (Isp): <span style="color:#00ffcc;">± 1.8 %</span></p>
+            <p>Estado del Motor HIL: <span id="mc-status" style="color:#4ade80;">STANDBY / READY</span></p>
+            <p>Iteraciones de Vuelo: <span class="metric-val">500 Runs</span></p>
+            <p>Varianza de Viento (Sanarate): <span class="metric-val">± 15.0%</span></p>
+            <p>Probabilidad de Éxito: <span id="success-prob" class="metric-val">--</span></p>
             <br>
-            <button onclick="alert('Simulación Monte Carlo iniciada en backend HIL.')">Ejecutar 500 Corridas Estocásticas</button>
+            <button id="run-btn" onclick="executeMonteCarlo()">Ejecutar 500 Corridas Estocásticas</button>
         </div>
         <div class="card">
             <h3>Dispersión de Zona de Impacto</h3>
@@ -41,17 +43,49 @@
     </div>
     <script>
         const ctx = document.getElementById('mcChart').getContext('2d');
-        new Chart(ctx, {
+        const mcChart = new Chart(ctx, {
             type: 'scatter',
             data: {
                 datasets: [{
-                    label: 'Impact Dispersion (Lat/Lon offset)',
-                    data: [{x: 0.1, y: 0.2}, {x: -0.15, y: 0.05}, {x: 0.05, y: -0.1}, {x: -0.05, y: -0.15}, {x: 0.2, y: -0.05}],
+                    label: 'Impact Dispersion (Offset m)',
+                    data: [{x: 12.4, y: 45.2}, {x: -32.1, y: 15.8}, {x: 18.5, y: -22.4}, {x: -15.2, y: -41.0}],
                     backgroundColor: '#fbbf24'
                 }]
             },
             options: { responsive: true }
         });
+
+        async function executeMonteCarlo() {
+            const btn = document.getElementById('run-btn');
+            btn.innerText = '⏳ Procesando 500 Corridas...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/monte-carlo/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ runs: 500, wind_variance_pct: 15.0 })
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('success-prob').innerText = (data.success_probability * 100).toFixed(1) + '%';
+                    alert(`✅ Simulación completada con éxito. Eje mayor de dispersión: ${data.impact_dispersion_ellipse.semi_major_axis_m}m`);
+                }
+            } catch (err) {
+                console.error('Error al conectar con el backend:', err);
+                alert('❌ Error al ejecutar la simulación Monte Carlo en el servidor.');
+            } finally {
+                btn.innerText = 'Ejecutar 500 Corridas Estocásticas';
+                btn.disabled = false;
+            }
+        }
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws/telemetry`);
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            document.getElementById('mc-status').innerText = data.status;
+        };
     </script>
 </body>
 </html>

@@ -40,4 +40,4 @@ async def abort_mission():
     from routers.mission_path import navigator
     navigator.is_active = False
     fsw_state["status"] = "ABORTED / RTL"
-    return {"status": "SUCCESS", "message": "Misión abortada. Modo RTL activado."}
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "message": "Misión abortada. Modo RTL activado."}

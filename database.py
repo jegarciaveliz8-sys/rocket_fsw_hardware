@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 
 DB_NAME = "odyssey_telemetry.db"
 
@@ -21,7 +21,9 @@ def init_db():
             dsn_station TEXT,
             snr REAL,
             stations_status TEXT,
-            distance_from_base_m REAL
+            distance_from_base_m REAL,
+            name TEXT,
+            packet_type TEXT
         )
     """)
     conn.commit()
@@ -34,7 +36,7 @@ def log_telemetry(data: dict):
         INSERT INTO flight_logs (timestamp, flight_time, altitude, velocity, lat, lon, chamber_pressure, battery_pct, status, dsn_station, snr, stations_status, distance_from_base_m)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        datetime.utcnow().isoformat(),
+        datetime.now(timezone.utc).isoformat(),
         data.get("time", 0.0),
         data.get("altitude", 0.0),
         data.get("velocity", 0.0),

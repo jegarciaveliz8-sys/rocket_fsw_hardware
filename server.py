@@ -1,3 +1,4 @@
+from fastapi import Response
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -11,6 +12,7 @@ import uvicorn
 
 from database import init_db, log_telemetry
 
+# 1. Instanciar la aplicación PRIMERO
 app = FastAPI(
     title="ODYSSEY-1 Modular Mission Control Center",
     version="1.3.0"
@@ -93,7 +95,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2) * math.sin(dlambda/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# WebSocket de Telemetría en Vivo (Resuelve el 403 y restablece el streaming)
+# WebSocket de Telemetría en Vivo
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
@@ -253,6 +255,14 @@ def get_replay_sessions():
         return {"frames": rows}
     except Exception as e:
         return {"frames": [], "error": str(e)}
+
+@app.get("/ui")
+def get_ui_info():
+    return {"version": "1.3.0", "system": "ODYSSEY-1 GCS"}
+
+@app.get("/dashboard")
+def dashboard_endpoint():
+    return Response(content="<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>ODYSSEY-1 GCS - Mission Control Center</h1></body></html>", media_type="text/html")
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

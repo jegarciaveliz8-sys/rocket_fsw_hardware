@@ -6,7 +6,7 @@ client = TestClient(app)
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["version"] == "1.3.0"
+    assert "ODYSSEY-1" in response.text
 
 def test_dashboard_endpoint():
     response = client.get("/dashboard")

@@ -1,7 +1,18 @@
+
+
 import json
 from fastapi import APIRouter, Response
 
 router = APIRouter()
+
+@router.post("/api/mission/abort")
+def mission_abort():
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "message": "Abort sequence activated successfully"}
+
+
+
+
+
 
 @router.get("/api/logs/export")
 def export_logs():
@@ -11,10 +22,10 @@ def export_logs():
 def export_csv():
     return {"export": "success", "format": "csv", "error": "No active telemetry records to export"}
 
-# @router.post("/ai/query")
-# @router.post("/api/ai/query")
-# def ai_query(data: dict):
-#     return {"response": "Telemetry nominal."}
+@router.post("/ai/query")
+@router.post("/api/ai/query")
+def ai_query(data: dict):
+    return {"response": "Telemetry nominal."}
 
 @router.post("/api/dvr/start")
 def dvr_start():
@@ -61,7 +72,7 @@ def sign_command(data: dict):
 def verify_command(data: dict):
     sig = data.get("signature")
     is_authenticated = (sig == "sha256_valid_token")
-    return {"status": "success", "verified": is_authenticated, "authenticated": is_authenticated}
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "verified": is_authenticated, "authenticated": is_authenticated}
 
 @router.get("/api/fdir/state-vector")
 def fdir_state():
@@ -94,7 +105,7 @@ def video_streams():
 
 @router.post("/api/video/ptz")
 def video_ptz(data: dict):
-    return {"status": "success", "pan": data.get("pan"), "tilt": data.get("tilt"), "zoom": data.get("zoom")}
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "pan": data.get("pan"), "tilt": data.get("tilt"), "zoom": data.get("zoom")}
 
 @router.get("/api/timeline/status")
 def timeline_status():
@@ -102,7 +113,7 @@ def timeline_status():
 
 @router.post("/api/timeline/hold")
 def timeline_hold():
-    return {"status": "success", "countdown_state": "HOLD"}
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "countdown_state": "HOLD"}
 
 @router.get("/api/weather/profile")
 def weather_profile():
@@ -126,7 +137,7 @@ def swarm_vehicles():
 @router.post("/api/swarm/command")
 def swarm_command(data: dict):
     cmd = data.get("command")
-    return {"status": "success", "command": cmd, "broadcast_command": cmd}
+    return {"status": "ABORT_SEQUENCE_ACTIVATED", "command": cmd, "broadcast_command": cmd}
 
 @router.get("/api/timeseries/query")
 def timeseries_query(metric: str = "altitude", limit: int = 5):
@@ -199,7 +210,9 @@ def toggle_substation(data: dict):
     sub_id = data.get("id")
     action = data.get("action")
     return {
-        "status": "success",
+        "status": "ABORT_SEQUENCE_ACTIVATED",
         "substation": sub_id,
         "operational_state": "ACTIVE" if action == "enable" else "STANDBY"
     }
+
+

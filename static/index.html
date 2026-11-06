@@ -134,7 +134,7 @@
         const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
             attribution: '&copy; CARTO'
-        }).addTo(map); // Por defecto oscuro táctico
+        }).addTo(map);
 
         const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -151,7 +151,6 @@
 
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
 
-        // Coordenadas de Estaciones DSN
         const dsnStations = {
             "DSS-63": { name: "Madrid (DSS-63)", lat: 40.4168, lon: -3.7038 },
             "DSS-14": { name: "Goldstone (DSS-14)", lat: 35.4267, lon: -116.8900 },
@@ -166,12 +165,11 @@
             })
                 .then(res => res.json())
                 .then(data => {
-                    console.log("[DSN] Estación cambiada:", data);
                     const st = dsnStations[stationKey];
                     if (st) {
                         map.flyTo([st.lat, st.lon], 6, { animate: true, duration: 1.5 });
                         document.getElementById('lbl-active-dsn-name').innerText = st.name;
-                        logConsole(`[DSN] Conmutado a ${st.name} (${st.lat}, ${st.lon})`);
+                        logConsole(`[DSN] Conmutado a ${st.name}`);
                     }
                 })
                 .catch(err => console.error("[DSN Error]", err));
@@ -209,36 +207,51 @@
                 .then(data => logConsole(`[FDIR] Falla ${faultName}: ${checkbox.checked ? 'ACTIVADA' : 'DESACTIVADA'}`));
         }
 
-        // WebSocket Telemetría en Vivo
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
+        // WebSocket con Reconexión Automática para Cloud (Render)
+        let ws;
+        function connectWS() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/telemetry`);
 
-        ws.onmessage = function(event) {
-            const pkt = JSON.parse(event.data);
-            document.getElementById('val-alt').innerText = `${pkt.altitude.toFixed(1)} m`;
-            document.getElementById('val-vel').innerText = `${pkt.velocity.toFixed(1)} m/s`;
-            document.getElementById('val-pc').innerText = `${pkt.chamber_pressure.toFixed(1)} MPa`;
-            document.getElementById('val-bat').innerText = `${pkt.battery_pct} %`;
+            ws.onmessage = function(event) {
+                const pkt = JSON.parse(event.data);
+                document.getElementById('val-alt').innerText = `${pkt.altitude.toFixed(1)} m`;
+                document.getElementById('val-vel').innerText = `${pkt.velocity.toFixed(1)} m/s`;
+                document.getElementById('val-pc').innerText = `${pkt.chamber_pressure.toFixed(1)} MPa`;
+                document.getElementById('val-bat').innerText = `${pkt.battery_pct} %`;
+                
+                document.getElementById('val-pitch').innerText = `${(pkt.pitch || 0).toFixed(1)}°`;
+                document.getElementById('val-roll').innerText = `${(pkt.roll || 0).toFixed(1)}°`;
+                document.getElementById('val-yaw').innerText = `${(pkt.yaw || 0).toFixed(1)}°`;
+
+                let baseLat = 14.7883;
+                let baseLon = -90.1988;
+                let curLat = pkt.lat || (baseLat + (pkt.altitude * 0.00001));
+                let curLon = pkt.lon || (baseLon + (pkt.velocity * 0.000005));
+
+                rocketMarker.setLatLng([curLat, curLon]);
+                map.panTo([curLat, curLon], { animate: true });
+
+                if (pkt.ccsds_frame) {
+                    document.getElementById('ccsds-inspector').innerText = pkt.ccsds_frame;
+                }
+            };
+
+            ws.onopen = () => logConsole("[INFO] Enlace WebSocket establecido con éxito.");
             
-            document.getElementById('val-pitch').innerText = `${(pkt.pitch || 0).toFixed(1)}°`;
-            document.getElementById('val-roll').innerText = `${(pkt.roll || 0).toFixed(1)}°`;
-            document.getElementById('val-yaw').innerText = `${(pkt.yaw || 0).toFixed(1)}°`;
+            ws.onclose = () => {
+                logConsole("[WARNING] Enlace WebSocket cerrado. Reconectando en 3s...");
+                setTimeout(connectWS, 3000);
+            };
+            
+            ws.onerror = (err) => {
+                console.error("WS Error:", err);
+                ws.close();
+            };
+        }
 
-            // Desplazamiento dinámico en tiempo real desde Sanarate basado en telemetría de vuelo
-            let baseLat = 14.7883;
-            let baseLon = -90.1988;
-            let curLat = pkt.lat || (baseLat + (pkt.altitude * 0.00001));
-            let curLon = pkt.lon || (baseLon + (pkt.velocity * 0.000005));
+        connectWS();
 
-            rocketMarker.setLatLng([curLat, curLon]);
-            map.panTo([curLat, curLon], { animate: true });
-
-            if (pkt.ccsds_frame) {
-                document.getElementById('ccsds-inspector').innerText = pkt.ccsds_frame;
-            }
-        };
-
-        ws.onopen = () => logConsole("[INFO] Enlace WebSocket establecido con éxito.");
         function sendAIChat() {
             const inputField = document.getElementById('ai-input');
             const aiConsole = document.getElementById('ai-console');
@@ -264,8 +277,6 @@
                 aiConsole.scrollTop = aiConsole.scrollHeight;
             });
         }
-        
-        ws.onclose = () => logConsole("[WARNING] Enlace WebSocket cerrado.");
     </script>
 </body>
 </html>

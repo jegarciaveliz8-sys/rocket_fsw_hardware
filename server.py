@@ -105,8 +105,8 @@ async def websocket_telemetry(websocket: WebSocket):
             t += 1
             mission_api.fsw_state["time"] = t
 
-            status_text = "POWERED ASCENT" if t == 1 else "STANDBY / READY"
-            if mission_path.navigator.is_active or t == 1:
+            status_text = "POWERED ASCENT" if mission_path.navigator.is_active else "STANDBY / READY"
+            if mission_path.navigator.is_active:
                 current_state = {
                     "lat": mission_api.fsw_state["lat"],
                     "lon": mission_api.fsw_state["lon"],
@@ -120,7 +120,6 @@ async def websocket_telemetry(websocket: WebSocket):
                 mission_api.fsw_state["lon"] = updated_state["lon"]
                 mission_api.fsw_state["altitude"] = round(updated_state["altitude"], 1)
                 mission_api.fsw_state["velocity"] = updated_state.get("velocity", 12.5)
-                status_text = "POWERED ASCENT"
 
             current_alt = mission_api.fsw_state["altitude"]
             current_vel = mission_api.fsw_state["velocity"]
@@ -185,84 +184,18 @@ async def websocket_telemetry(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
 
-# Vistas de Paneles HTML
+# Ruta raíz principal vinculada a static/index.html
 @app.get("/", response_class=HTMLResponse)
 def get_root_flight_deck():
-    path = os.path.join(BASE_DIR, "web", "flight_deck.html")
+    path = os.path.join(BASE_DIR, "static", "index.html")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>Flight Deck no encontrado</h1>"
-
-@app.get("/command", response_class=HTMLResponse)
-def get_command_panel():
-    path = os.path.join(BASE_DIR, "web", "command_panel.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Command Panel no encontrado</h1>"
-
-@app.get("/engineering", response_class=HTMLResponse)
-def get_engineering_console():
-    path = os.path.join(BASE_DIR, "web", "engineering.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Engineering Console no encontrado</h1>"
-
-@app.get("/replay", response_class=HTMLResponse)
-def get_replay_panel():
-    path = os.path.join(BASE_DIR, "web", "replay.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Replay Panel no encontrado</h1>"
-
-@app.get("/orbit", response_class=HTMLResponse)
-def get_orbit_panel():
-    path = os.path.join(BASE_DIR, "web", "orbit.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Orbit Panel no encontrado</h1>"
-
-@app.get("/payload", response_class=HTMLResponse)
-def get_payload_panel():
-    path = os.path.join(BASE_DIR, "web", "payload.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Payload Panel no encontrado</h1>"
-
-@app.get("/montecarlo", response_class=HTMLResponse)
-def get_montecarlo_panel():
-    path = os.path.join(BASE_DIR, "web", "montecarlo.html")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Monte Carlo Panel no encontrado</h1>"
-
-@app.get("/api/replay/sessions")
-def get_replay_sessions():
-    import sqlite3
-    try:
-        conn = sqlite3.connect("odyssey_telemetry.db")
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, timestamp, flight_time, altitude, velocity, status FROM flight_logs ORDER BY id DESC LIMIT 100")
-        rows = [dict(row) for row in cursor.fetchall()]
-        conn.close()
-        return {"frames": rows}
-    except Exception as e:
-        return {"frames": [], "error": str(e)}
+    return "<h1>Index HTML no encontrado</h1>"
 
 @app.get("/ui")
 def get_ui_info():
     return {"version": "1.3.0", "system": "ODYSSEY-1 GCS"}
-
-@app.get("/dashboard")
-def dashboard_endpoint():
-    return Response(content="<html><head><title>ODYSSEY-1 GCS - Mission Control Center</title></head><body><h1>ODYSSEY-1 GCS - Mission Control Center</h1></body></html>", media_type="text/html")
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

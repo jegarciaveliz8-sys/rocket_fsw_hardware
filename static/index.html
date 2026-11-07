@@ -91,7 +91,7 @@
 
         <!-- COLUMNA CENTRAL -->
         <div class="panel">
-            <h3>📡 GIS & Radar Táctico (Haz clic para fijar destino)</h3>
+            <h3>📡 GIS & Radar Táctico (Haz clic para vuelo autónomo)</h3>
             <div id="map"></div>
 
             <h3>Curva de Altitud & Batería</h3>
@@ -101,7 +101,7 @@
 
             <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema inicializado en Sanarate [HIL]. Haz clic en cualquier lugar del mapa para fijar un waypoint dinámico.<br>
+                [T+0s] Sistema inicializado en Sanarate [HIL]. Haz clic en cualquier lugar del mapa para volar automáticamente.<br>
             </div>
         </div>
 
@@ -161,7 +161,7 @@
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
         let targetMarker = null;
 
-        // CAPTURAR CLIC EN EL MAPA PARA WAYPOINT DINÁMICO
+        // CAPTURAR CLIC EN EL MAPA E INICIAR VUELO AUTÓNOMO INMEDIATO
         map.on('click', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
@@ -182,15 +182,29 @@
             }
 
             try {
-                const response = await fetch('/api/mission/set_click_target', {
+                // 1. Inyectar el waypoint dinámico al FSW
+                const resp1 = await fetch('/api/mission/set_click_target', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lat: lat, lon: lon })
                 });
-                const data = await response.json();
-                logConsole(`[RTOS] Waypoint dinámico inyectado al FSW con éxito.`);
+                await resp1.json();
+
+                // 2. Iniciar la misión automáticamente con el waypoint seleccionado
+                const resp2 = await fetch('/api/mission/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        waypoints: [
+                            { lat: lat, lon: lon, alt: 3000.0, loiter: 3, name: "Target-Click" }
+                        ]
+                    })
+                });
+                await resp2.json();
+
+                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el objetivo seleccionado en el mapa.`);
             } catch (err) {
-                logConsole(`[ERROR] Fallo al transmitir el objetivo al servidor.`);
+                logConsole(`[ERROR] Fallo en la comunicación con el FSW.`);
             }
         });
 

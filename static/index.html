@@ -11,6 +11,9 @@
         body { background-color: #0b0f19; color: #f3f4f6; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         header { background: #111827; border-bottom: 1px solid #1f2937; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
         header h1 { font-size: 1.25rem; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
+        .nav-links { display: flex; gap: 15px; font-size: 0.85rem; }
+        .nav-links a { color: #9ca3af; text-decoration: none; transition: color 0.2s; }
+        .nav-links a:hover, .nav-links a.active { color: #38bdf8; font-weight: bold; }
         .badge { background: #065f46; color: #34d399; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
         
         .main-container { display: grid; grid-template-columns: 320px 1fr 320px; gap: 12px; padding: 12px; flex: 1; overflow: hidden; }
@@ -28,9 +31,7 @@
         .btn-danger:hover { background: #b91c1c; }
         
         #map { width: 100%; height: 260px; border-radius: 6px; border: 1px solid #1f2937; }
-        
         .console { background: #030712; color: #4ade80; font-family: monospace; font-size: 0.75rem; padding: 8px; border-radius: 6px; height: 120px; overflow-y: auto; border: 1px solid #1f2937; }
-        
         .subsystem-box { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
         .subsystem-box label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     </style>
@@ -38,6 +39,15 @@
 <body>
     <header>
         <h1>🚀 ODYSSEY-1 GCS [Sanarate Ground Station & HIL]</h1>
+        <div class="nav-links">
+            <a href="/" class="active">🚀 Flight Deck</a>
+            <a href="/command">⚠️ Command</a>
+            <a href="/engineering">🛠️ Engineering</a>
+            <a href="/orbit">🛰️ Orbit</a>
+            <a href="/payload">🔬 Payload</a>
+            <a href="/montecarlo">📊 Monte Carlo</a>
+            <a href="/replay">📼 Replay Audit</a>
+        </div>
         <div class="badge" id="system-status">CONNECTED (RTOS KERNEL)</div>
     </header>
 
@@ -123,7 +133,6 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Inicialización de mapa con capas múltiples
         const map = L.map('map').setView([14.7883, -90.1988], 13);
 
         const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -163,16 +172,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ station: stationKey })
             })
-                .then(res => res.json())
-                .then(data => {
-                    const st = dsnStations[stationKey];
-                    if (st) {
-                        map.flyTo([st.lat, st.lon], 6, { animate: true, duration: 1.5 });
-                        document.getElementById('lbl-active-dsn-name').innerText = st.name;
-                        logConsole(`[DSN] Conmutado a ${st.name}`);
-                    }
-                })
-                .catch(err => console.error("[DSN Error]", err));
+            .then(res => res.json())
+            .then(data => {
+                const st = dsnStations[stationKey];
+                if (st) {
+                    map.flyTo([st.lat, st.lon], 6, { animate: true, duration: 1.5 });
+                    document.getElementById('lbl-active-dsn-name').innerText = st.name;
+                    logConsole(`[DSN] Conmutado a ${st.name}`);
+                }
+            })
+            .catch(err => console.error("[DSN Error]", err));
         }
 
         function logConsole(msg) {
@@ -198,7 +207,7 @@
         }
 
         function abortMission() {
-            fetch('/mission/abort', { method: 'POST' }).then(() => logConsole("[MISION] ⏹ Abortar / RTL activado."));
+            fetch('/api/mission/abort', { method: 'POST' }).then(() => logConsole("[MISION] ⏹ Abortar / RTL activado."));
         }
 
         function toggleFault(faultName, checkbox) {
@@ -207,7 +216,6 @@
                 .then(data => logConsole(`[FDIR] Falla ${faultName}: ${checkbox.checked ? 'ACTIVADA' : 'DESACTIVADA'}`));
         }
 
-        // WebSocket con Reconexión Automática para Cloud (Render)
         let ws;
         function connectWS() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

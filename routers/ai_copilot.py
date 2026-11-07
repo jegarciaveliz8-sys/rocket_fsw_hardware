@@ -71,7 +71,7 @@ async def diagnose_flight(req: AIPromptRequest):
                 f"Consulta del Usuario: {query}"
             )
 
-            response = model.generate_content(context_prompt)
+            response = await model.generate_content_async(context_prompt)
             if response and response.text:
                 return {
                     "status": "SUCCESS",
@@ -80,12 +80,12 @@ async def diagnose_flight(req: AIPromptRequest):
         except Exception as e:
             print(f"[Gemini Error]: {e}")
 
-    # Fallback si no hay API key o no se ha instalado google-generativeai
+    # Fallback si no hay API key o ocurre un error con la API
     return {
         "status": "SUCCESS",
         "response": (
             f"🧠 **Copiloto AI (Modo Local):** Recibido: \"{query}\".\n\n"
             f"📍 **Telemetría Actual:** Altitud: {current_alt} m | Velocidad: {current_vel} m/s | Batería: {current_bat}% | Estado: {current_status}\n\n"
-            f"*(Para habilitar respuestas inteligentes autónomas sobre cualquier tema con la IA en la nube, asegúrate de instalar `pip install google-generativeai` y exportar tu `GEMINI_API_KEY` en la terminal)*."
+            f"*(Asegúrate de que la variable `GEMINI_API_KEY` esté configurada correctamente en el entorno o en el panel de Render)*."
         )
     }

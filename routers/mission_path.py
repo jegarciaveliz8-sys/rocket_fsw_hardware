@@ -27,7 +27,8 @@ class MissionNavigator:
         self.action_triggered = False
 
     def set_dynamic_target(self, lat: float, lon: float):
-        dynamic_waypoint = [{"lat": lat, "lon": lon, "alt": 50.0, "loiter": 3}]
+        # Waypoint dinámico con altitud de crucero de 3000 metros
+        dynamic_waypoint = [{"lat": lat, "lon": lon, "alt": 3000.0, "loiter": 3}]
         self.load_waypoints(dynamic_waypoint)
         return {"status": "SUCCESS", "target": {"lat": lat, "lon": lon}}
 
@@ -35,60 +36,54 @@ class MissionNavigator:
         if not self.is_active or not self.waypoints:
             return current_state
 
-        # Si ya terminamos todos los waypoints, activar RTL automático a la base
         if self.current_wp_index >= len(self.waypoints):
             return self.execute_rtl(current_state)
 
         target = self.waypoints[self.current_wp_index]
         target_lat = target.get("lat", 14.7883)
         target_lon = target.get("lon", -90.1988)
-        target_alt = target.get("alt", 35.0)
-        loiter_time = target.get("loiter", 0) # Segundos de espera
+        target_alt = target.get("alt", 3000.0)
+        loiter_time = target.get("loiter", 0)
 
         curr_lat = current_state["lat"]
         curr_lon = current_state["lon"]
 
-        # Calcular distancia aproximada al waypoint actual
         lat_diff = target_lat - curr_lat
         lon_diff = target_lon - curr_lon
         distance = math.sqrt(lat_diff**2 + lon_diff**2)
 
-        # Umbral de llegada (aproximadamente 5-10 metros)
-        if distance < 0.00015:
-            # Llegó al waypoint
+        # Umbral dinámico de llegada (cuando esté a menos de ~1.5 km del objetivo)
+        if distance < 0.01:
             if loiter_time > 0:
                 if self.loiter_timer == 0:
                     self.loiter_timer = time.time()
-                    current_state.setdefault("alerts", []).append(f"Llegando a WP{self.current_wp_index}. Iniciando Loiter ({loiter_time}s) y ráfaga fotográfica 📸")
+                    current_state.setdefault("alerts", []).append(f"Llegando al objetivo dinámico. Loiter activo ({loiter_time}s) 📸")
                 
                 elapsed = time.time() - self.loiter_timer
-                current_state["velocity"] = 0.0 # Estacionario en Loiter
+                current_state["velocity"] = 0.0
                 
                 if elapsed >= loiter_time:
-                    # Termino el Loiter, pasar al siguiente punto
                     self.loiter_timer = 0
                     self.current_wp_index += 1
             else:
-                # Sin loiter, disparo rápido y avanzar
-                current_state.setdefault("alerts", []).append(f"WP{self.current_wp_index} alcanzado. 📸 Foto capturada.")
+                current_state.setdefault("alerts", []).append("Waypoint dinámico alcanzado. 📸 Objetivo asegurado.")
                 self.current_wp_index += 1
         else:
-            # Tránsito hacia el waypoint (interpolación suave)
-            speed = 0.00008 # Velocidad de avance vectorial
-            current_state["lat"] += (lat_diff / distance) * speed
-            current_state["lon"] += (lon_diff / distance) * speed
+            # Velocidad adaptativa basada en la distancia total (permite tránsitos rápidos de larga distancia)
+            speed_step = max(0.05, min(0.2, distance * 0.08))
+            current_state["lat"] += lat_diff * speed_step
+            current_state["lon"] += lon_diff * speed_step
             current_state["altitude"] = target_alt
-            current_state["velocity"] = 12.5
+            current_state["velocity"] = 180.5
 
         return current_state
 
     def execute_rtl(self, current_state):
-        # Modo Return to Launch hacia la base de Sanarate
         lat_diff = self.base_coords["lat"] - current_state["lat"]
         lon_diff = self.base_coords["lon"] - current_state["lon"]
         distance = math.sqrt(lat_diff**2 + lon_diff**2)
 
-        if distance < 0.00015:
+        if distance < 0.01:
             current_state["lat"] = self.base_coords["lat"]
             current_state["lon"] = self.base_coords["lon"]
             current_state["altitude"] = 0.0
@@ -97,11 +92,11 @@ class MissionNavigator:
             self.is_active = False
             current_state.setdefault("alerts", []).append("RTL completado con éxito. Aterrizaje en Base Sanarate.")
         else:
-            speed = 0.0001
-            current_state["lat"] += (lat_diff / distance) * speed
-            current_state["lon"] += (lon_diff / distance) * speed
-            current_state["altitude"] = 25.0
-            current_state["velocity"] = 15.0
+            speed_step = max(0.05, min(0.2, distance * 0.08))
+            current_state["lat"] += lat_diff * speed_step
+            current_state["lon"] += lon_diff * speed_step
+            current_state["altitude"] = 1500.0
+            current_state["velocity"] = 200.0
             current_state["status"] = "RTL (RETURNING TO LAUNCH)"
 
         return current_state

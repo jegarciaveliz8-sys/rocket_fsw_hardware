@@ -1,5 +1,13 @@
 import math
 import time
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/api/mission", tags=["Mission Path"])
+
+class TargetClickRequest(BaseModel):
+    lat: float
+    lon: float
 
 class MissionNavigator:
     def __init__(self):
@@ -17,6 +25,11 @@ class MissionNavigator:
         self.is_active = True
         self.loiter_timer = 0
         self.action_triggered = False
+
+    def set_dynamic_target(self, lat: float, lon: float):
+        dynamic_waypoint = [{"lat": lat, "lon": lon, "alt": 50.0, "loiter": 3}]
+        self.load_waypoints(dynamic_waypoint)
+        return {"status": "SUCCESS", "target": {"lat": lat, "lon": lon}}
 
     def update_position(self, current_state):
         if not self.is_active or not self.waypoints:
@@ -94,3 +107,7 @@ class MissionNavigator:
         return current_state
 
 navigator = MissionNavigator()
+
+@router.post("/set_click_target")
+def set_click_target(req: TargetClickRequest):
+    return navigator.set_dynamic_target(req.lat, req.lon)

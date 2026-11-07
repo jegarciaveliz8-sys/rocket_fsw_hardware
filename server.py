@@ -9,6 +9,10 @@ import hashlib
 import hmac
 import math
 import uvicorn
+from dotenv import load_dotenv
+
+# Carga obligatoria del archivo .env al arrancar el servidor
+load_dotenv()
 
 from database import init_db, log_telemetry
 

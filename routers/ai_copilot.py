@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 try:
-    import google.generativeai as genai
+    from google import genai
     HAS_GENAI = True
 except ImportError:
     HAS_GENAI = False
@@ -27,10 +27,6 @@ router = APIRouter(prefix="/api/ai", tags=["AI Copilot"])
 class AIPromptRequest(BaseModel):
     prompt: str
 
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key and HAS_GENAI:
-    genai.configure(api_key=api_key)
-
 @router.post("/diagnose")
 async def diagnose_flight(req: AIPromptRequest):
     query = req.prompt.strip()
@@ -43,8 +39,12 @@ async def diagnose_flight(req: AIPromptRequest):
     current_lat = fsw_state.get("lat", 14.7883)
     current_lon = fsw_state.get("lon", -90.1988)
 
+    api_key = os.environ.get("GEMINI_API_KEY")
+
     if api_key and HAS_GENAI:
         try:
+            client = genai.Client(api_key=api_key)
+            
             system_instruction = (
                 "Eres el Copiloto AI del Centro de Control de Misión ODYSSEY-1 en Sanarate. "
                 "Tienes autonomía e inteligencia total. Puedes responder con fluidez, profundidad y precisión "
@@ -53,11 +53,6 @@ async def diagnose_flight(req: AIPromptRequest):
                 "Cuando el usuario consulte sobre el estado de la misión, el vehículo, la telemetría o los subsistemas, "
                 "integra dinámicamente los datos en tiempo real. Para cualquier otra consulta general, responde como "
                 "un copiloto brillante y sin restricciones temáticas."
-            )
-
-            model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                system_instruction=system_instruction
             )
 
             context_prompt = (
@@ -71,21 +66,28 @@ async def diagnose_flight(req: AIPromptRequest):
                 f"Consulta del Usuario: {query}"
             )
 
-            response = await model.generate_content_async(context_prompt)
+            # Usando un modelo confirmado de tu listado oficial
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=context_prompt,
+                config={
+                    "system_instruction": system_instruction
+                }
+            )
+            
             if response and response.text:
                 return {
                     "status": "SUCCESS",
                     "response": response.text.strip()
                 }
         except Exception as e:
-            print(f"[Gemini Error]: {e}")
+            print(f"[Gemini Error Detallado]: {e}")
 
-    # Fallback si no hay API key o ocurre un error con la API
     return {
         "status": "SUCCESS",
         "response": (
             f"🧠 **Copiloto AI (Modo Local):** Recibido: \"{query}\".\n\n"
             f"📍 **Telemetría Actual:** Altitud: {current_alt} m | Velocidad: {current_vel} m/s | Batería: {current_bat}% | Estado: {current_status}\n\n"
-            f"*(Asegúrate de que la variable `GEMINI_API_KEY` esté configurada correctamente en el entorno o en el panel de Render)*."
+            f"*(Asegúrate de que la variable `GEMINI_API_KEY` esté configurada correctamente en el archivo .env)*."
         )
     }

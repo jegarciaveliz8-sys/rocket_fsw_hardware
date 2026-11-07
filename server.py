@@ -12,7 +12,6 @@ import uvicorn
 
 from database import init_db, log_telemetry
 
-# 1. Instanciar la aplicación PRIMERO
 app = FastAPI(
     title="ODYSSEY-1 Modular Mission Control Center",
     version="1.3.0"
@@ -184,7 +183,7 @@ async def websocket_telemetry(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
 
-# Ruta raíz principal vinculada a static/index.html
+# Rutas de Vistas HTML Modulares
 @app.get("/", response_class=HTMLResponse)
 def get_root_flight_deck():
     path = os.path.join(BASE_DIR, "static", "index.html")
@@ -192,6 +191,54 @@ def get_root_flight_deck():
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     return "<h1>Index HTML no encontrado</h1>"
+
+@app.get("/command", response_class=HTMLResponse)
+def get_command_panel():
+    path = os.path.join(BASE_DIR, "web", "command_panel.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Command Panel no encontrado</h1>"
+
+@app.get("/engineering", response_class=HTMLResponse)
+def get_engineering_console():
+    path = os.path.join(BASE_DIR, "web", "engineering.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Engineering Console no encontrado</h1>"
+
+@app.get("/orbit", response_class=HTMLResponse)
+def get_orbit_panel():
+    path = os.path.join(BASE_DIR, "web", "orbit.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Orbit Panel no encontrado</h1>"
+
+@app.get("/payload", response_class=HTMLResponse)
+def get_payload_panel():
+    path = os.path.join(BASE_DIR, "web", "payload.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Payload Panel no encontrado</h1>"
+
+@app.get("/montecarlo", response_class=HTMLResponse)
+def get_montecarlo_panel():
+    path = os.path.join(BASE_DIR, "web", "montecarlo.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Monte Carlo Panel no encontrado</h1>"
+
+@app.get("/replay", response_class=HTMLResponse)
+def get_replay_panel():
+    path = os.path.join(BASE_DIR, "web", "replay.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Replay Panel no encontrado</h1>"
 
 @app.get("/ui")
 def get_ui_info():

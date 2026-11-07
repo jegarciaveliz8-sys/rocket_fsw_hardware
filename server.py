@@ -105,19 +105,15 @@ async def websocket_telemetry(websocket: WebSocket):
             mission_api.fsw_state["time"] = t
 
             status_text = "POWERED ASCENT" if mission_path.navigator.is_active else "STANDBY / READY"
+            
+            # Ejecutar actualización del navegador inteligente si está activo
             if mission_path.navigator.is_active:
-                current_state = {
-                    "lat": mission_api.fsw_state["lat"],
-                    "lon": mission_api.fsw_state["lon"],
-                    "altitude": mission_api.fsw_state["altitude"],
-                    "velocity": mission_api.fsw_state["velocity"],
-                    "status": "POWERED ASCENT"
-                }
+                current_state = mission_api.fsw_state.copy()
                 updated_state = mission_path.navigator.update_position(current_state)
                 
                 mission_api.fsw_state["lat"] = updated_state["lat"]
                 mission_api.fsw_state["lon"] = updated_state["lon"]
-                mission_api.fsw_state["altitude"] = round(updated_state["altitude"], 1)
+                mission_api.fsw_state["altitude"] = round(updated_state.get("altitude", mission_api.fsw_state["altitude"]), 1)
                 mission_api.fsw_state["velocity"] = updated_state.get("velocity", 12.5)
 
             current_alt = mission_api.fsw_state["altitude"]
@@ -130,7 +126,7 @@ async def websocket_telemetry(websocket: WebSocket):
             sim_blackout_text = "SOURCE: ACTIVE_MONITORING"
 
             distance_from_base = calculate_distance(BASE_LAT, BASE_LON, current_lat, current_lon)
-            if distance_from_base > 500.0:
+            if distance_from_base > 5000000.0:  # Ampliado el límite para vuelos internacionales largos
                 status_text = "🚨 GEOFENCE BREACHED: RTL ACTIVADO"
 
             if fault_injection.fault_state["low_battery_spike"]:

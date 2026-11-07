@@ -15,8 +15,6 @@ class MissionNavigator:
         self.current_wp_index = 0
         self.is_active = False
         self.loiter_timer = 0
-        self.loiter_duration = 0
-        self.action_triggered = False
         self.base_coords = {"lat": 14.7883, "lon": -90.1988, "alt": 0.0}
 
     def load_waypoints(self, waypoints):
@@ -24,11 +22,10 @@ class MissionNavigator:
         self.current_wp_index = 0
         self.is_active = True
         self.loiter_timer = 0
-        self.action_triggered = False
 
     def set_dynamic_target(self, lat: float, lon: float):
-        # Waypoint dinámico con altitud de crucero de 3000 metros
-        dynamic_waypoint = [{"lat": lat, "lon": lon, "alt": 3000.0, "loiter": 3}]
+        # Waypoint con altitud de crucero de 3000 metros y 5 segundos de Loiter científico (fotos/video)
+        dynamic_waypoint = [{"lat": lat, "lon": lon, "alt": 3000.0, "loiter": 5}]
         self.load_waypoints(dynamic_waypoint)
         return {"status": "SUCCESS", "target": {"lat": lat, "lon": lon}}
 
@@ -36,6 +33,7 @@ class MissionNavigator:
         if not self.is_active or not self.waypoints:
             return current_state
 
+        # Si terminamos los waypoints de ida, ejecutamos RTL inteligente a Sanarate
         if self.current_wp_index >= len(self.waypoints):
             return self.execute_rtl(current_state)
 
@@ -43,7 +41,7 @@ class MissionNavigator:
         target_lat = target.get("lat", 14.7883)
         target_lon = target.get("lon", -90.1988)
         target_alt = target.get("alt", 3000.0)
-        loiter_time = target.get("loiter", 0)
+        loiter_time = target.get("loiter", 5)
 
         curr_lat = current_state["lat"]
         curr_lon = current_state["lon"]
@@ -52,29 +50,27 @@ class MissionNavigator:
         lon_diff = target_lon - curr_lon
         distance = math.sqrt(lat_diff**2 + lon_diff**2)
 
-        # Umbral dinámico de llegada (cuando esté a menos de ~1.5 km del objetivo)
+        # Umbral de llegada al objetivo dinámico
         if distance < 0.01:
-            if loiter_time > 0:
-                if self.loiter_timer == 0:
-                    self.loiter_timer = time.time()
-                    current_state.setdefault("alerts", []).append(f"Llegando al objetivo dinámico. Loiter activo ({loiter_time}s) 📸")
-                
-                elapsed = time.time() - self.loiter_timer
-                current_state["velocity"] = 0.0
-                
-                if elapsed >= loiter_time:
-                    self.loiter_timer = 0
-                    self.current_wp_index += 1
-            else:
-                current_state.setdefault("alerts", []).append("Waypoint dinámico alcanzado. 📸 Objetivo asegurado.")
-                self.current_wp_index += 1
+            if self.loiter_timer == 0:
+                self.loiter_timer = time.time()
+                current_state.setdefault("alerts", []).append("🎯 Objetivo alcanzado. Iniciando grabación de video 🎥 y ráfaga fotográfica 📸.")
+
+            elapsed = time.time() - self.loiter_timer
+            current_state["velocity"] = 0.0
+            current_state["status"] = f"SCIENCE PAYLOAD ACTIVE ({int(elapsed)}/{loiter_time}s)"
+
+            if elapsed >= loiter_time:
+                current_state.setdefault("alerts", []).append("✅ Datos de carga útil asegurados. Iniciando RTL automático a Base Sanarate.")
+                self.loiter_timer = 0
+                self.current_wp_index += 1  # Incrementa para pasar a RTL en el siguiente ciclo
         else:
-            # Velocidad adaptativa basada en la distancia total (permite tránsitos rápidos de larga distancia)
             speed_step = max(0.05, min(0.2, distance * 0.08))
             current_state["lat"] += lat_diff * speed_step
             current_state["lon"] += lon_diff * speed_step
             current_state["altitude"] = target_alt
             current_state["velocity"] = 180.5
+            current_state["status"] = "AUTONOMOUS FLIGHT (EN ROUTE TO TARGET)"
 
         return current_state
 
@@ -83,21 +79,22 @@ class MissionNavigator:
         lon_diff = self.base_coords["lon"] - current_state["lon"]
         distance = math.sqrt(lat_diff**2 + lon_diff**2)
 
+        # Umbral de aterrizaje en la base de Sanarate
         if distance < 0.01:
             current_state["lat"] = self.base_coords["lat"]
             current_state["lon"] = self.base_coords["lon"]
             current_state["altitude"] = 0.0
             current_state["velocity"] = 0.0
-            current_state["status"] = "MISSION COMPLETE / LANDED"
+            current_state["status"] = "MISSION COMPLETE / LANDED AT SANARATE"
             self.is_active = False
-            current_state.setdefault("alerts", []).append("RTL completado con éxito. Aterrizaje en Base Sanarate.")
+            current_state.setdefault("alerts", []).append("🛬 Aterrizaje autónomo completado con éxito en Base Sanarate.")
         else:
             speed_step = max(0.05, min(0.2, distance * 0.08))
             current_state["lat"] += lat_diff * speed_step
             current_state["lon"] += lon_diff * speed_step
             current_state["altitude"] = 1500.0
             current_state["velocity"] = 200.0
-            current_state["status"] = "RTL (RETURNING TO LAUNCH)"
+            current_state["status"] = "RTL (RETURNING TO BASE SANARATE)"
 
         return current_state
 

@@ -91,7 +91,7 @@
 
         <!-- COLUMNA CENTRAL -->
         <div class="panel">
-            <h3>📡 GIS & Radar Táctico</h3>
+            <h3>📡 GIS & Radar Táctico (Haz clic para fijar destino)</h3>
             <div id="map"></div>
 
             <h3>Curva de Altitud & Batería</h3>
@@ -101,7 +101,7 @@
 
             <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema inicializado en Sanarate [HIL]. Arquitectura modular cargada.<br>
+                [T+0s] Sistema inicializado en Sanarate [HIL]. Haz clic en cualquier lugar del mapa para fijar un waypoint dinámico.<br>
             </div>
         </div>
 
@@ -159,6 +159,40 @@
         L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
 
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
+        let targetMarker = null;
+
+        // CAPTURAR CLIC EN EL MAPA PARA WAYPOINT DINÁMICO
+        map.on('click', async function(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+
+            logConsole(`[GIS] Destino seleccionado: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
+
+            if (targetMarker) {
+                targetMarker.setLatLng([lat, lon]);
+            } else {
+                targetMarker = L.marker([lat, lon], {
+                    icon: L.divIcon({
+                        className: 'target-icon',
+                        html: '<span style="font-size:22px;">🎯</span>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(map).bindPopup("<b>🎯 Objetivo Dinámico</b>").openPopup();
+            }
+
+            try {
+                const response = await fetch('/api/mission/set_click_target', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: lat, lon: lon })
+                });
+                const data = await response.json();
+                logConsole(`[RTOS] Waypoint dinámico inyectado al FSW con éxito.`);
+            } catch (err) {
+                logConsole(`[ERROR] Fallo al transmitir el objetivo al servidor.`);
+            }
+        });
 
         const dsnStations = {
             "DSS-63": { name: "Madrid (DSS-63)", lat: 40.4168, lon: -3.7038 },

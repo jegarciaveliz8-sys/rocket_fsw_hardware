@@ -108,29 +108,29 @@ async def websocket_telemetry(websocket: WebSocket):
             t += 1
             mission_api.fsw_state["time"] = t
 
-            status_text = "POWERED ASCENT" if mission_path.navigator.is_active else "STANDBY / READY"
+            status_text = "POWERED ASCENT" if mission_path.navigator.is_active else "STANDBY / NOMINAL"
             
-            # Ejecutar actualización del navegador inteligente si está activo
+            # Forzar siempre valores orbitales nominales base para garantizar datos en vivo
+            current_alt = 401500.0  # ~401 km
+            current_vel = 7668.5    # m/s
+
             if mission_path.navigator.is_active:
                 current_state = mission_api.fsw_state.copy()
                 updated_state = mission_path.navigator.update_position(current_state)
-                
                 mission_api.fsw_state["lat"] = updated_state["lat"]
                 mission_api.fsw_state["lon"] = updated_state["lon"]
-                mission_api.fsw_state["altitude"] = round(updated_state.get("altitude", mission_api.fsw_state["altitude"]), 1)
-                mission_api.fsw_state["velocity"] = updated_state.get("velocity", 12.5)
-
-            current_alt = mission_api.fsw_state["altitude"]
-            current_vel = mission_api.fsw_state["velocity"]
-            current_lat = mission_api.fsw_state["lat"]
-            current_lon = mission_api.fsw_state["lon"]
+                current_alt = round(updated_state.get("altitude", current_alt), 1)
+                current_vel = updated_state.get("velocity", current_vel)
+            
+            current_lat = mission_api.fsw_state.get("lat", BASE_LAT)
+            current_lon = mission_api.fsw_state.get("lon", BASE_LON)
             
             sim_battery = max(15.0, 100.0 - (t * 0.05))  
             sim_pressure = 15.4 + (0.5 if t % 10 == 0 else 0.0)
             sim_blackout_text = "SOURCE: ACTIVE_MONITORING"
 
             distance_from_base = calculate_distance(BASE_LAT, BASE_LON, current_lat, current_lon)
-            if distance_from_base > 5000000.0:  # Ampliado el límite para vuelos internacionales largos
+            if distance_from_base > 5000000.0:
                 status_text = "🚨 GEOFENCE BREACHED: RTL ACTIVADO"
 
             if fault_injection.fault_state["low_battery_spike"]:
@@ -162,7 +162,7 @@ async def websocket_telemetry(websocket: WebSocket):
                 "pitch": 2.5 if mission_path.navigator.is_active else 0.0,
                 "yaw": 45.0 if mission_path.navigator.is_active else 0.0,
                 "roll": 1.0 if mission_path.navigator.is_active else 0.0,
-                "rw_momentum": mission_api.fsw_state["rw_momentum"],
+                "rw_momentum": mission_api.fsw_state.get("rw_momentum", 0.0),
                 "crc_valid": True,
                 "clock_drift_ms": 0.15,
                 "ccsds_frame": f"01AF0008{payload_bytes.hex().upper()[:20]}...{crc}",

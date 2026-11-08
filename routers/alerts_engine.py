@@ -1,8 +1,6 @@
 import math
 from routers import fault_injection
 
-_last_alert_states = {}
-
 # Coordenadas base de referencia en Sanarate (Punto de lanzamiento)
 BASE_LAT = 14.7883
 BASE_LON = -90.1988
@@ -21,7 +19,6 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return R * c
 
 def check_telemetry_alerts(telemetry_data: dict) -> list:
-    global _last_alert_states
     alerts = []
     
     altitude = telemetry_data.get("altitude", 0)
@@ -31,84 +28,72 @@ def check_telemetry_alerts(telemetry_data: dict) -> list:
     lat = telemetry_data.get("lat", BASE_LAT)
     lon = telemetry_data.get("lon", BASE_LON)
     
-    current_conditions = {}
-    
     # 1. Validación de Inyección de Fallos FDIR (Prioridad alta)
     if fault_injection.fault_state.get("rf_blackout"):
-        current_conditions["FAULT_RF_BLACKOUT"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": "⚠️ FDIR: Pérdida total de enlace RF (Blackout DSN simulado)"
-        }
+        })
         
     if fault_injection.fault_state.get("gps_failure"):
-        current_conditions["FAULT_GPS_FAILURE"] = {
+        alerts.append({
             "level": "WARNING",
             "message": "🛰️ FDIR: Falla de GPS (No Fix / IMU Dead Reckoning activo)"
-        }
+        })
         
     if fault_injection.fault_state.get("low_battery_spike"):
-        current_conditions["FAULT_BATTERY_SPIKE"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": "⚡ FDIR: Pico crítico de descarga en banco de baterías"
-        }
+        })
 
     # 2. Validación de Geocerca (Sanarate Perimetro)
     distance_from_base = calculate_distance(BASE_LAT, BASE_LON, lat, lon)
     if distance_from_base > MAX_ALLOWED_RADIUS_METERS:
-        current_conditions["GEOFENCE_BREACH"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": f"¡VIOLACIÓN DE GEOCERCA! Dron a {distance_from_base:.1f}m del punto base."
-        }
+        })
     
     # 3. Regla de Altitud
-    if altitude > 120.0: # Límite legal estándar para drones recreativos/comerciales
-        current_conditions["ALTITUDE_WARNING"] = {
+    if altitude > 120.0:
+        alerts.append({
             "level": "WARNING",
             "message": f"Límite de altitud FAA/DGAC alcanzado: {altitude}m"
-        }
+        })
         
     # 4. Regla de Velocidad
     if velocity > 15.0:
-        current_conditions["VELOCITY_CRITICAL"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": f"Exceso de velocidad crítico: {velocity} m/s"
-        }
+        })
 
     # 5. Presión de Cámara (Pc)
     if chamber_pressure > 18.0:
-        current_conditions["PRESSURE_HIGH"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": f"¡Sobrepresión crítica en cámara! Pc: {chamber_pressure} MPa"
-        }
+        })
     elif chamber_pressure < 12.0:
-        current_conditions["PRESSURE_LOW"] = {
+        alerts.append({
             "level": "WARNING",
             "message": f"Caída de presión en cámara (Pc baja): {chamber_pressure} MPa"
-        }
+        })
 
     # 6. Batería normal
     if battery_pct < 20.0 and not fault_injection.fault_state.get("low_battery_spike"):
         lvl = "CRITICAL" if battery_pct < 10.0 else "WARNING"
-        current_conditions["BATTERY_LOW"] = {
+        alerts.append({
             "level": lvl,
             "message": f"Nivel de batería bajo: {battery_pct}%"
-        }
+        })
         
     # 7. Integridad CRC
     if not telemetry_data.get("crc_valid", True):
-        current_conditions["CRC_ERROR"] = {
+        alerts.append({
             "level": "CRITICAL",
             "message": "Pérdida de integridad en paquetes CCSDS / CRC Inválido"
-        }
-
-    # Filtrar para enviar solo nuevas alertas o cambios de estado
-    for key, alert_data in current_conditions.items():
-        if key not in _last_alert_states or _last_alert_states[key] != alert_data["message"]:
-            alerts.append(alert_data)
-            _last_alert_states[key] = alert_data["message"]
-            
-    resolved_keys = [k for k in _last_alert_states if k not in current_conditions]
-    for k in resolved_keys:
-        del _last_alert_states[k]
+        })
         
     return alerts

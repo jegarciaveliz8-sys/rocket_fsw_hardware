@@ -1,4 +1,5 @@
 import math
+from routers import fault_injection
 
 _last_alert_states = {}
 
@@ -32,7 +33,26 @@ def check_telemetry_alerts(telemetry_data: dict) -> list:
     
     current_conditions = {}
     
-    # 1. Validación de Geocerca (Sanarate Perimetro)
+    # 1. Validación de Inyección de Fallos FDIR (Prioridad alta)
+    if fault_injection.fault_state.get("rf_blackout"):
+        current_conditions["FAULT_RF_BLACKOUT"] = {
+            "level": "CRITICAL",
+            "message": "⚠️ FDIR: Pérdida total de enlace RF (Blackout DSN simulado)"
+        }
+        
+    if fault_injection.fault_state.get("gps_failure"):
+        current_conditions["FAULT_GPS_FAILURE"] = {
+            "level": "WARNING",
+            "message": "🛰️ FDIR: Falla de GPS (No Fix / IMU Dead Reckoning activo)"
+        }
+        
+    if fault_injection.fault_state.get("low_battery_spike"):
+        current_conditions["FAULT_BATTERY_SPIKE"] = {
+            "level": "CRITICAL",
+            "message": "⚡ FDIR: Pico crítico de descarga en banco de baterías"
+        }
+
+    # 2. Validación de Geocerca (Sanarate Perimetro)
     distance_from_base = calculate_distance(BASE_LAT, BASE_LON, lat, lon)
     if distance_from_base > MAX_ALLOWED_RADIUS_METERS:
         current_conditions["GEOFENCE_BREACH"] = {
@@ -40,21 +60,21 @@ def check_telemetry_alerts(telemetry_data: dict) -> list:
             "message": f"¡VIOLACIÓN DE GEOCERCA! Dron a {distance_from_base:.1f}m del punto base."
         }
     
-    # 2. Regla de Altitud
+    # 3. Regla de Altitud
     if altitude > 120.0: # Límite legal estándar para drones recreativos/comerciales
         current_conditions["ALTITUDE_WARNING"] = {
             "level": "WARNING",
             "message": f"Límite de altitud FAA/DGAC alcanzado: {altitude}m"
         }
         
-    # 3. Regla de Velocidad
+    # 4. Regla de Velocidad
     if velocity > 15.0:
         current_conditions["VELOCITY_CRITICAL"] = {
             "level": "CRITICAL",
             "message": f"Exceso de velocidad crítico: {velocity} m/s"
         }
 
-    # 4. Presión de Cámara (Pc)
+    # 5. Presión de Cámara (Pc)
     if chamber_pressure > 18.0:
         current_conditions["PRESSURE_HIGH"] = {
             "level": "CRITICAL",
@@ -66,15 +86,15 @@ def check_telemetry_alerts(telemetry_data: dict) -> list:
             "message": f"Caída de presión en cámara (Pc baja): {chamber_pressure} MPa"
         }
 
-    # 5. Batería
-    if battery_pct < 20.0:
+    # 6. Batería normal
+    if battery_pct < 20.0 and not fault_injection.fault_state.get("low_battery_spike"):
         lvl = "CRITICAL" if battery_pct < 10.0 else "WARNING"
         current_conditions["BATTERY_LOW"] = {
             "level": lvl,
             "message": f"Nivel de batería bajo: {battery_pct}%"
         }
         
-    # 6. Integridad CRC
+    # 7. Integridad CRC
     if not telemetry_data.get("crc_valid", True):
         current_conditions["CRC_ERROR"] = {
             "level": "CRITICAL",

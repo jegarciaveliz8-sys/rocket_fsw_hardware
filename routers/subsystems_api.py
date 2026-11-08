@@ -10,6 +10,12 @@ SUBSTATION_STATES = {
     "SUB-03": {"status": "NOMINAL", "load_pct": 89.2}
 }
 
+# Configuración en memoria para el propagador orbital interactivo
+ORBITAL_CONFIG = {
+    "gravity_model": "J2_J4",
+    "dsn_station": "Madrid (DSS-63)"
+}
+
 @router.post("/api/mission/abort")
 def mission_abort():
     return {"status": "ABORT_SEQUENCE_ACTIVATED", "message": "Abort sequence activated successfully"}
@@ -192,7 +198,6 @@ def get_substations_status():
     sub2_cfg = limits.get("SUB-02", {"name": "Telemetry Ground Relay", "voltage_kv": 4.16})
     sub3_cfg = limits.get("SUB-03", {"name": "DSN Uplink Power Station", "voltage_kv": 23.0})
     
-    # Obtener estados actuales con prioridad en la conmutación interactiva de la UI
     sub1_state = SUBSTATION_STATES["SUB-01"]
     sub2_state = SUBSTATION_STATES["SUB-02"]
     sub3_state = SUBSTATION_STATES["SUB-03"]
@@ -228,7 +233,7 @@ def toggle_substation(data: dict):
         elif action == "disable":
             SUBSTATION_STATES[sub_id]["status"] = "STANDBY"
             SUBSTATION_STATES[sub_id]["load_pct"] = 0.0
-        else: # Toggle automático
+        else:
             current = SUBSTATION_STATES[sub_id]["status"]
             if current == "NOMINAL":
                 SUBSTATION_STATES[sub_id]["status"] = "STANDBY"
@@ -241,4 +246,21 @@ def toggle_substation(data: dict):
         "status": "SUCCESS",
         "substation": sub_id,
         "operational_state": SUBSTATION_STATES.get(sub_id, {}).get("status", "UNKNOWN")
+    }
+
+@router.post("/api/orbital/configure")
+def configure_orbital(data: dict):
+    global ORBITAL_CONFIG
+    ORBITAL_CONFIG["gravity_model"] = data.get("gravity_model", "J2_J4")
+    ORBITAL_CONFIG["dsn_station"] = data.get("dsn_station", "Madrid (DSS-63)")
+    return {"status": "SUCCESS", "config": ORBITAL_CONFIG}
+
+@router.post("/api/orbital/recalculate")
+def recalculate_orbit():
+    return {
+        "status": "RECALCULATED",
+        "model_applied": ORBITAL_CONFIG["gravity_model"],
+        "dsn": ORBITAL_CONFIG["dsn_station"],
+        "estimated_altitude_m": 401.5,
+        "velocity_ms": 7669.1
     }

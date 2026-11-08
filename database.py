@@ -4,8 +4,12 @@ from datetime import datetime, timezone
 DB_NAME = "odyssey_telemetry.db"
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=30.0)
     cursor = conn.cursor()
+    # Activar modo WAL para concurrencia de alto rendimiento y evitar bloqueos de base de datos
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.execute("PRAGMA synchronous=NORMAL;")
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS flight_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +34,7 @@ def init_db():
     conn.close()
 
 def log_telemetry(data: dict):
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, timeout=30.0)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO flight_logs (timestamp, flight_time, altitude, velocity, lat, lon, chamber_pressure, battery_pct, status, dsn_station, snr, stations_status, distance_from_base_m)

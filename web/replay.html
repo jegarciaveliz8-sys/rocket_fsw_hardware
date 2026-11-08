@@ -22,7 +22,7 @@
         select { background: #1f2937; color: #38bdf8; border: 1px solid #374151; padding: 7px; border-radius: 4px; font-weight: bold; }
         .telemetry-live { font-size: 1.2em; color: #4ade80; font-weight: bold; }
         .anomaly-badge { background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
-        #map { height: 350px; border-radius: 6px; border: 1px solid #374151; }
+        #map { height: 350px; width: 100%; border-radius: 6px; border: 1px solid #374151; }
     </style>
 </head>
 <body>
@@ -155,6 +155,10 @@
             rocketMarker = L.marker([14.7833, -90.1167]).addTo(map)
                 .bindPopup("ODYSSEY-1 Position");
             polyline = L.polyline([], {color: "#38bdf8", weight: 4}).addTo(map);
+
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
         }
 
         async function loadSessionLogs() {

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -33,7 +32,10 @@
         </div>
     </div>
 
-        <script>
+    <script>
+    // Mantenemos un registro local del estado actual de cada subestación para alternar correctamente
+    const subStates = {};
+
     function loadSubstations() {
         fetch("/api/substations/status")
             .then(response => response.json())
@@ -42,8 +44,14 @@
                 container.innerHTML = "";
                 
                 data.substations.forEach(sub => {
-                    const isNominal = sub.status === "NOMINAL";
+                    // Guardar estado actual si no existe
+                    if (subStates[sub.id] === undefined) {
+                        subStates[sub.id] = sub.status === "NOMINAL" || sub.status === "ACTIVE";
+                    }
+
+                    const isNominal = sub.status === "NOMINAL" || sub.status === "ACTIVE";
                     const color = isNominal ? "#10b981" : (sub.status.includes("CRITICAL") ? "#dc2626" : "#f59e0b");
+                    
                     container.innerHTML += `
                         <div style="background: #1f2937; padding: 15px; border-radius: 6px; border-left: 4px solid ${color};">
                             <strong>${sub.name}</strong><br>
@@ -60,18 +68,25 @@
     }
 
     function toggleSub(subId) {
+        // Alternar el estado booleano local y enviar "enable" o "disable" acorde al backend
+        subStates[subId] = !subStates[subId];
+        const actionType = subStates[subId] ? "enable" : "disable";
+
         fetch("/api/substations/toggle", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: subId, action: "toggle" })
+            body: JSON.stringify({ id: subId, action: actionType })
         })
         .then(res => res.json())
         .then(data => {
             console.log("Subestación actualizada:", data);
             loadSubstations();
-        });
+        })
+        .catch(err => console.error("Error al alternar subestación:", err));
     }
 
     loadSubstations();
     setInterval(loadSubstations, 2000);
     </script>
+</body>
+</html>

@@ -1,18 +1,18 @@
-
-
 import json
 from fastapi import APIRouter, Response
 
 router = APIRouter()
 
+# Estado en memoria para persistir la conmutación interactiva de las subestaciones desde la UI
+SUBSTATION_STATES = {
+    "SUB-01": {"status": "NOMINAL", "load_pct": 68.5},
+    "SUB-02": {"status": "NOMINAL", "load_pct": 42.1},
+    "SUB-03": {"status": "NOMINAL", "load_pct": 89.2}
+}
+
 @router.post("/api/mission/abort")
 def mission_abort():
     return {"status": "ABORT_SEQUENCE_ACTIVATED", "message": "Abort sequence activated successfully"}
-
-
-
-
-
 
 @router.get("/api/logs/export")
 def export_logs():
@@ -170,7 +170,6 @@ def network_impair(data: dict):
 def orbital_windows():
     return {"launch_windows": [{"start": 1793149950, "end": 1793153550}]}
 
-
 from routers import fault_injection
 
 @router.get("/api/substations/status")
@@ -189,19 +188,31 @@ def get_substations_status():
             "SUB-03": {"name": "DSN Uplink Power Station", "voltage_kv": 23.0, "max_load_pct": 90.0}
         }
     
-    sub3_status = "CRITICAL / BLACKOUT" if rf_lost else "WARNING"
-    sub2_status = "VOLTAGE DROP" if batt_spike else "NOMINAL"
-    
     sub1_cfg = limits.get("SUB-01", {"name": "Sanarate Primary Grid", "voltage_kv": 13.8})
     sub2_cfg = limits.get("SUB-02", {"name": "Telemetry Ground Relay", "voltage_kv": 4.16})
     sub3_cfg = limits.get("SUB-03", {"name": "DSN Uplink Power Station", "voltage_kv": 23.0})
     
+    # Obtener estados actuales con prioridad en la conmutación interactiva de la UI
+    sub1_state = SUBSTATION_STATES["SUB-01"]
+    sub2_state = SUBSTATION_STATES["SUB-02"]
+    sub3_state = SUBSTATION_STATES["SUB-03"]
+
+    if rf_lost and sub3_state["status"] == "NOMINAL":
+        sub3_status = "CRITICAL / BLACKOUT"
+    else:
+        sub3_status = sub3_state["status"]
+
+    if batt_spike and sub2_state["status"] == "NOMINAL":
+        sub2_status = "VOLTAGE DROP"
+    else:
+        sub2_status = sub2_state["status"]
+
     return {
-        "network_status": "DEGRADED" if (rf_lost or batt_spike) else "ONLINE",
+        "network_status": "DEGRADED" if (rf_lost or batt_spike or sub1_state["status"] != "NOMINAL") else "ONLINE",
         "substations": [
-            {"id": "SUB-01", "name": sub1_cfg.get("name"), "voltage_kv": sub1_cfg.get("voltage_kv"), "load_pct": 68.5, "status": "NOMINAL"},
-            {"id": "SUB-02", "name": sub2_cfg.get("name"), "voltage_kv": sub2_cfg.get("voltage_kv") if not batt_spike else round(sub2_cfg.get("voltage_kv", 4.16) * 0.77, 2), "load_pct": 42.1, "status": sub2_status},
-            {"id": "SUB-03", "name": sub3_cfg.get("name"), "voltage_kv": sub3_cfg.get("voltage_kv"), "load_pct": 94.5 if rf_lost else 89.2, "status": sub3_status}
+            {"id": "SUB-01", "name": sub1_cfg.get("name"), "voltage_kv": sub1_cfg.get("voltage_kv"), "load_pct": sub1_state["load_pct"], "status": sub1_state["status"]},
+            {"id": "SUB-02", "name": sub2_cfg.get("name"), "voltage_kv": sub2_cfg.get("voltage_kv") if sub2_status != "VOLTAGE DROP" else round(sub2_cfg.get("voltage_kv", 4.16) * 0.77, 2), "load_pct": sub2_state["load_pct"], "status": sub2_status},
+            {"id": "SUB-03", "name": sub3_cfg.get("name"), "voltage_kv": sub3_cfg.get("voltage_kv"), "load_pct": sub3_state["load_pct"], "status": sub3_status}
         ]
     }
 
@@ -209,10 +220,25 @@ def get_substations_status():
 def toggle_substation(data: dict):
     sub_id = data.get("id")
     action = data.get("action")
+    
+    if sub_id in SUBSTATION_STATES:
+        if action == "enable":
+            SUBSTATION_STATES[sub_id]["status"] = "NOMINAL"
+            SUBSTATION_STATES[sub_id]["load_pct"] = 75.0
+        elif action == "disable":
+            SUBSTATION_STATES[sub_id]["status"] = "STANDBY"
+            SUBSTATION_STATES[sub_id]["load_pct"] = 0.0
+        else: # Toggle automático
+            current = SUBSTATION_STATES[sub_id]["status"]
+            if current == "NOMINAL":
+                SUBSTATION_STATES[sub_id]["status"] = "STANDBY"
+                SUBSTATION_STATES[sub_id]["load_pct"] = 0.0
+            else:
+                SUBSTATION_STATES[sub_id]["status"] = "NOMINAL"
+                SUBSTATION_STATES[sub_id]["load_pct"] = 75.0
+
     return {
-        "status": "ABORT_SEQUENCE_ACTIVATED",
+        "status": "SUCCESS",
         "substation": sub_id,
-        "operational_state": "ACTIVE" if action == "enable" else "STANDBY"
+        "operational_state": SUBSTATION_STATES.get(sub_id, {}).get("status", "UNKNOWN")
     }
-
-

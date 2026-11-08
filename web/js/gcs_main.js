@@ -57,10 +57,10 @@ async function abortMission() {
 }
 
 async function toggleFault(faultName, checkbox) {
-    await fetch('/api/fault/inject', {
+    await fetch('/api/faults/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fault: faultName, active: checkbox.checked })
+        body: JSON.stringify({ fault_type: faultName, active: checkbox.checked })
     });
     logConsole(`[INYECCIÓN] ${faultName} -> ${checkbox.checked ? 'ACTIVADO' : 'DESACTIVADO'}`);
 }

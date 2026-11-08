@@ -65,7 +65,12 @@
             try {
                 const res = await fetch('/api/mission/abort', { method: 'POST' });
                 const data = await res.json();
-                alert('🚨 ' + data.message);
+                
+                // Mostrar alerta visual directa en el contenedor de FDIR
+                const alertsContainer = document.getElementById('alerts-container');
+                if (alertsContainer) {
+                    alertsContainer.innerHTML = `<div style="color: #f87171; font-weight: bold; background: #450a0a; padding: 6px; border-radius: 4px; margin-bottom: 4px;">🚨 ABORT ACTIVADO: ${data.message || 'Modo seguro RTL hacia Sanarate en curso'}</div>` + alertsContainer.innerHTML;
+                }
             } catch (err) {
                 alert('Error al ejecutar Abort');
             }
@@ -79,9 +84,9 @@
                     body: JSON.stringify({ fault_type: faultType, active: true })
                 });
                 const data = await response.json();
-                alert('⚡ Comando de inyección enviado: ' + faultType);
+                console.log('⚡ Comando de inyección enviado:', data);
             } catch (err) {
-                alert('Fallo inyectado en HIL');
+                console.error('Error al inyectar fallo:', err);
             }
         }
 
@@ -105,7 +110,8 @@
             if (data.alerts && data.alerts.length > 0) {
                 let html = '';
                 data.alerts.forEach(alertItem => {
-                    html += `<div>[${alertItem.level || 'ALERTA'}] ${alertItem.message}</div>`;
+                    const colorStyle = alertItem.level === 'CRITICAL' ? 'color: #f87171; font-weight: bold;' : 'color: #fbbf24;';
+                    html += `<div style="margin-bottom: 4px; ${colorStyle}">[${alertItem.level || 'ALERTA'}] ${alertItem.message}</div>`;
                 });
                 document.getElementById('alerts-container').innerHTML = html;
             } else {

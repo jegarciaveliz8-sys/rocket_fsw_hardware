@@ -64,6 +64,8 @@
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
 
+        let dsnInitialized = false;
+
         ws.onmessage = function(event) {
             const data = JSON.parse(event.data);
             if (data.altitude !== undefined) {
@@ -75,8 +77,10 @@
             if (data.lat !== undefined && data.lon !== undefined) {
                 document.getElementById('orbit-coords').innerText = `${data.lat.toFixed(4)}, ${data.lon.toFixed(4)}`;
             }
-            if (data.dsn_station) {
+            // Sincroniza la estación DSN solo la primera vez para permitir control manual libre
+            if (data.dsn_station && !dsnInitialized) {
                 document.getElementById('dsn-select').value = data.dsn_station;
+                dsnInitialized = true;
             }
         };
 

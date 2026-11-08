@@ -61,16 +61,16 @@
     </div>
 
     <script>
+        let abortTriggered = false;
+
         async function triggerAbort() {
             try {
                 const res = await fetch('/api/mission/abort', { method: 'POST' });
                 const data = await res.json();
+                abortTriggered = true;
                 
-                // Mostrar alerta visual directa en el contenedor de FDIR
-                const alertsContainer = document.getElementById('alerts-container');
-                if (alertsContainer) {
-                    alertsContainer.innerHTML = `<div style="color: #f87171; font-weight: bold; background: #450a0a; padding: 6px; border-radius: 4px; margin-bottom: 4px;">🚨 ABORT ACTIVADO: ${data.message || 'Modo seguro RTL hacia Sanarate en curso'}</div>` + alertsContainer.innerHTML;
-                }
+                // Forzar renderizado inmediato del estado de Aborto en pantalla
+                renderAlerts([]);
             } catch (err) {
                 alert('Error al ejecutar Abort');
             }
@@ -90,6 +90,27 @@
             }
         }
 
+        function renderAlerts(serverAlerts) {
+            const alertsContainer = document.getElementById('alerts-container');
+            let html = '';
+
+            // Si se activó el aborto, mantenemos una alerta persistente independiente
+            if (abortTriggered) {
+                html += `<div style="color: #f87171; font-weight: bold; background: #7f1d1d; padding: 6px; border-radius: 4px; margin-bottom: 6px; border: 1px solid #f87171;">🚨 [EMERGENCIA] MODO SEGURO RTL ACTIVADO HACIA SANARATE</div>`;
+            }
+
+            if (serverAlerts && serverAlerts.length > 0) {
+                serverAlerts.forEach(alertItem => {
+                    const colorStyle = alertItem.level === 'CRITICAL' ? 'color: #f87171; font-weight: bold;' : 'color: #fbbf24;';
+                    html += `<div style="margin-bottom: 4px; ${colorStyle}">[${alertItem.level || 'ALERTA'}] ${alertItem.message}</div>`;
+                });
+            } else if (!abortTriggered) {
+                html += 'Sin alertas activas. Sistema nominal.';
+            }
+
+            alertsContainer.innerHTML = html;
+        }
+
         const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
         
@@ -107,16 +128,7 @@
                 bElem.style.color = data.blackout_status.includes('WARNING') ? '#f87171' : '#4ade80';
             }
             
-            if (data.alerts && data.alerts.length > 0) {
-                let html = '';
-                data.alerts.forEach(alertItem => {
-                    const colorStyle = alertItem.level === 'CRITICAL' ? 'color: #f87171; font-weight: bold;' : 'color: #fbbf24;';
-                    html += `<div style="margin-bottom: 4px; ${colorStyle}">[${alertItem.level || 'ALERTA'}] ${alertItem.message}</div>`;
-                });
-                document.getElementById('alerts-container').innerHTML = html;
-            } else {
-                document.getElementById('alerts-container').innerHTML = 'Sin alertas activas. Sistema nominal.';
-            }
+            renderAlerts(data.alerts || []);
         };
     </script>
 </body>

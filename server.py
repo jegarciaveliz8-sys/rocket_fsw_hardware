@@ -1,5 +1,4 @@
-from fastapi import Response
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Response, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,10 +7,11 @@ import asyncio
 import hashlib
 import hmac
 import math
+import requests
 import uvicorn
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
-# Carga obligatoria del archivo .env al arrancar el servidor
 load_dotenv()
 
 from database import init_db, log_telemetry
@@ -32,14 +32,13 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     init_db()
-    print("✅ Base de datos de telemetría (odyssey_telemetry.db) inicializada.")
+    print("✅ Base de datos de telemetría inicializada.")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 web_dir = os.path.join(BASE_DIR, "web")
 if os.path.exists(web_dir):
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
 
-# Importación de todos los routers modulares
 from routers import (
     mission_api, subsystems_api, ai_copilot, dji_bridge, alerts_engine, 
     blackbox, commands_api, mission_path, fault_injection, mission_planner, 
@@ -51,7 +50,6 @@ from routers import (
 )
 from routers.stations_api import get_active_station_telemetry, get_dynamic_dsn_station
 
-# Registro de routers
 app.include_router(mission_api.router)
 app.include_router(subsystems_api.router)
 app.include_router(ai_copilot.router)
@@ -98,7 +96,69 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2) * math.sin(dlambda/2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# WebSocket de Telemetría en Vivo
+class LaunchPadConfig(BaseModel):
+    lat: float
+    lon: float
+
+@app.post("/api/mission/set-launch-pad")
+def set_launch_pad(config: LaunchPadConfig):
+    global BASE_LAT, BASE_LON
+    BASE_LAT = config.lat
+    BASE_LON = config.lon
+    return {"status": "SUCCESS", "message": f"Base redefinida a [{BASE_LAT}, {BASE_LON}]"}
+
+class NamedMissionRequest(BaseModel):
+    base_name: str
+    target_name: str
+
+def geocode_place(place_name: str):
+    url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(place_name)}&format=json&limit=1"
+    headers = {'User-Agent': 'Odyssey1-GCS/1.3'}
+    res = requests.get(url, headers=headers)
+    data = res.json()
+    if data and len(data) > 0:
+        lat = float(data[0]['lat'])
+        lon = float(data[0]['lon'])
+        return lat, lon, data[0].get('display_name', place_name)
+    raise ValueError(f"No se pudieron encontrar coordenadas para: {place_name}")
+
+@app.post("/api/mission/named-flight")
+def start_named_mission(config: NamedMissionRequest):
+    global BASE_LAT, BASE_LON
+    try:
+        b_lat, b_lon, b_formatted = geocode_place(config.base_name)
+        t_lat, t_lon, t_formatted = geocode_place(config.target_name)
+
+        BASE_LAT, BASE_LON = b_lat, b_lon
+
+        dist_meters = calculate_distance(b_lat, b_lon, t_lat, t_lon)
+        dist_km = round(dist_meters / 1000.0, 2)
+        cruise_altitude = max(3000.0, min(dist_meters * 0.05, 40000.0))
+
+        waypoints = [
+            {"lat": b_lat, "lon": b_lon, "alt": 100.0, "loiter": 2, "name": f"Base: {b_formatted}"},
+            {"lat": t_lat, "lon": t_lon, "alt": cruise_altitude, "loiter": 15, "name": f"Objetivo: {t_formatted}", "action": "AUTO_PAYLOAD_CAPTURE"},
+            {"lat": b_lat, "lon": b_lon, "alt": 0.0, "loiter": 0, "name": "RTL (Return to Launch Base)"}
+        ]
+        
+        # Compatibilidad automática con atributos del navegador FSW
+        if hasattr(mission_path.navigator, 'set_waypoints'):
+            mission_path.navigator.set_waypoints(waypoints)
+        elif hasattr(mission_path.navigator, 'waypoints'):
+            mission_path.navigator.waypoints = waypoints
+        
+        mission_path.navigator.is_active = True
+
+        return {
+            "status": "SUCCESS",
+            "message": f"Misión activada hacia '{t_formatted}' ({dist_km} km). Fotos/Video y RTL programados.",
+            "distance_km": dist_km,
+            "base": {"lat": b_lat, "lon": b_lon, "name": b_formatted},
+            "target": {"lat": t_lat, "lon": t_lon, "name": t_formatted}
+        }
+    except Exception as e:
+        return {"status": "ERROR", "message": str(e)}
+
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
@@ -107,12 +167,10 @@ async def websocket_telemetry(websocket: WebSocket):
         while True:
             t += 1
             mission_api.fsw_state["time"] = t
-
             status_text = "POWERED ASCENT" if mission_path.navigator.is_active else "STANDBY / NOMINAL"
             
-            # Forzar siempre valores orbitales nominales base para garantizar datos en vivo
-            current_alt = 401500.0  # ~401 km
-            current_vel = 7668.5    # m/s
+            current_alt = 401500.0  
+            current_vel = 7668.5    
 
             if mission_path.navigator.is_active:
                 current_state = mission_api.fsw_state.copy()
@@ -135,10 +193,8 @@ async def websocket_telemetry(websocket: WebSocket):
 
             if fault_injection.fault_state["low_battery_spike"]:
                 sim_battery = 12.5  
-            
             if fault_injection.fault_state["rf_blackout"]:
                 sim_blackout_text = "⚠️ WARNING: RF LINK LOST (BLACKOUT)"
-
             if fault_injection.fault_state["gps_failure"]:
                 status_text = "⚠️ ERROR: 3D GPS FIX LOST"
 
@@ -183,7 +239,6 @@ async def websocket_telemetry(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
 
-# Rutas de Vistas HTML Modulares
 @app.get("/", response_class=HTMLResponse)
 def get_root_flight_deck():
     path = os.path.join(BASE_DIR, "static", "index.html")
@@ -246,69 +301,3 @@ def get_ui_info():
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
-
-from pydantic import BaseModel
-
-class LaunchPadConfig(BaseModel):
-    lat: float
-    lon: float
-
-@app.post("/api/mission/set-launch-pad")
-def set_launch_pad(config: LaunchPadConfig):
-    global BASE_LAT, BASE_LON
-    BASE_LAT = config.lat
-    BASE_LON = config.lon
-    print(f"🌍 Base de salida global actualizada a: [{BASE_LAT}, {BASE_LON}]")
-    return {
-        "status": "SUCCESS", 
-        "message": f"Base redefinida a [{BASE_LAT}, {BASE_LON}]"
-    }
-
-import requests
-
-class NamedMissionRequest(BaseModel):
-    base_name: str
-    target_name: str
-
-def geocode_place(place_name: str):
-    url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(place_name)}&format=json&limit=1"
-    headers = {'User-Agent': 'Odyssey1-GCS/1.3'}
-    res = requests.get(url, headers=headers)
-    data = res.json()
-    if data and len(data) > 0:
-        lat = float(data[0]['lat'])
-        lon = float(data[0]['lon'])
-        return lat, lon, data[0].get('display_name', place_name)
-    raise ValueError(f"No se pudieron encontrar coordenadas para: {place_name}")
-
-@app.post("/api/mission/named-flight")
-def start_named_mission(config: NamedMissionRequest):
-    global BASE_LAT, BASE_LON
-    try:
-        b_lat, b_lon, b_formatted = geocode_place(config.base_name)
-        t_lat, t_lon, t_formatted = geocode_place(config.target_name)
-
-        BASE_LAT, BASE_LON = b_lat, b_lon
-
-        dist_meters = calculate_distance(b_lat, b_lon, t_lat, t_lon)
-        dist_km = round(dist_meters / 1000.0, 2)
-        cruise_altitude = max(3000.0, min(dist_meters * 0.05, 40000.0))
-
-        waypoints = [
-            {"lat": b_lat, "lon": b_lon, "alt": 100.0, "loiter": 2, "name": f"Base: {b_formatted}"},
-            {"lat": t_lat, "lon": t_lon, "alt": cruise_altitude, "loiter": 15, "name": f"Objetivo: {t_formatted}", "action": "AUTO_PAYLOAD_CAPTURE"},
-            {"lat": b_lat, "lon": b_lon, "alt": 0.0, "loiter": 0, "name": "RTL (Return to Launch Base)"}
-        ]
-        
-        mission_path.navigator.set_waypoints(waypoints)
-        mission_path.navigator.is_active = True
-
-        return {
-            "status": "SUCCESS",
-            "message": f"Misión programada hacia '{t_formatted}' ({dist_km} km). Captura de payload y RTL activos.",
-            "distance_km": dist_km,
-            "base": {"lat": b_lat, "lon": b_lon, "name": b_formatted},
-            "target": {"lat": t_lat, "lon": t_lon, "name": t_formatted}
-        }
-    except Exception as e:
-        return {"status": "ERROR", "message": str(e)}

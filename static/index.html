@@ -33,7 +33,7 @@
         .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; border-radius: 6px; overflow: hidden; border: 1px solid #1f2937; }
         #map { width: 100%; height: 100%; }
         
-        .search-overlay {
+        .mission-overlay {
             position: absolute;
             top: 15px;
             left: 50px;
@@ -43,22 +43,12 @@
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.6);
             border: 1px solid #374151;
-            width: 380px;
+            width: 360px;
             display: flex;
             flex-direction: column;
             gap: 8px;
             backdrop-filter: blur(5px);
         }
-        .search-overlay input {
-            background: #030712;
-            color: #f3f4f6;
-            border: 1px solid #4b5563;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            width: 100%;
-        }
-        .search-overlay input:focus { border-color: #38bdf8; outline: none; }
 
         .console { background: #030712; color: #4ade80; font-family: monospace; font-size: 0.75rem; padding: 8px; border-radius: 6px; height: 110px; overflow-y: auto; border: 1px solid #1f2937; }
         .subsystem-box { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
@@ -92,7 +82,7 @@
             </div>
 
             <h3>Control de Misión & FDIR</h3>
-            <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
+            <button class="btn-action" onclick="resetMissionSequence()">🔄 REINICIAR SECUENCIA</button>
             <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
 
             <div class="subsystem-box" style="margin-top: 4px;">
@@ -111,20 +101,14 @@
             </div>
         </div>
 
-        <!-- COLUMNA CENTRAL: MAPA CON BARRA FLOTANTE -->
+        <!-- COLUMNA CENTRAL: MAPA CON SECUENCIA DE ARRASTRE -->
         <div class="panel" style="padding: 0; overflow: hidden; position: relative;">
             <div class="map-wrapper">
-                <div class="search-overlay">
-                    <div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase;">🌍 Buscador & Coordenadas Exactas</div>
-                    <div>
-                        <span style="font-size: 0.7rem; color: #9ca3af;">🏠 Base (Nombre o Lat, Lon):</span>
-                        <input type="text" id="input-base" value="14.7879, -90.1985">
+                <div class="mission-overlay">
+                    <div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase;">🎯 Secuencia de Arrastre de Misión</div>
+                    <div id="mission-instruction" style="font-size: 0.75rem; color: #34d399; font-weight: bold; line-height: 1.2;">
+                        Paso 1: Arrastra la gota 🏠 al lugar de la <b>Base de Salida</b> y suéltala.
                     </div>
-                    <div>
-                        <span style="font-size: 0.7rem; color: #9ca3af;">🎯 Destino (Nombre o Lat, Lon):</span>
-                        <input type="text" id="input-target" value="Palacio Nacional de Guatemala">
-                    </div>
-                    <button class="btn-action" style="background: #8b5cf6; margin-top: 2px;" onclick="startNamedMission()">🛰️ EJECUTAR MISIÓN PRECISA</button>
                 </div>
                 
                 <div id="map"></div>
@@ -147,12 +131,13 @@
 
             <h3>Consola de Misión (RTOS / CCSDS)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema listo. Puede ingresar nombres o coordenadas directas (ej: 14.7879, -90.1985).<br>
+                [T+0s] Sistema listo. Arrastre el marcador base en el mapa.<br>
             </div>
         </div>
     </div>
 
     <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const ctx = document.getElementById('telemetryChart').getContext('2d');
@@ -177,7 +162,7 @@
             }
         });
 
-        const map = L.map('map', { zoomControl: true }).setView([14.7879, -90.1985], 14);
+        const map = L.map('map', { zoomControl: true }).setView([14.7879, -90.1985], 13);
 
         const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
@@ -200,63 +185,102 @@
             "Estándar (OSM)": osmLayer
         }, null, { position: 'bottomright' }).addTo(map);
 
+        let activeMarker = null;
+        let baseCoords = null;
+        let targetCoords = null;
         let rocketMarker = L.marker([14.7879, -90.1985]).addTo(map);
-        let targetMarker = null;
-        let baseMarker = L.marker([14.7879, -90.1985], {
-            icon: L.divIcon({
-                className: 'base-icon',
-                html: '<span style="font-size:22px;">🏠</span>',
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
-            })
-        }).addTo(map).bindPopup("<b>🏠 Base de Salida Exacta</b>");
+        let pathLine = null;
 
-        async function startNamedMission() {
-            const baseName = document.getElementById('input-base').value.trim();
-            const targetName = document.getElementById('input-target').value.trim();
+        // Iniciar colocación de la Base
+        function initBasePlacement() {
+            if (activeMarker) map.removeLayer(activeMarker);
+            
+            activeMarker = L.marker([14.7879, -90.1985], {
+                draggable: true,
+                icon: L.divIcon({
+                    className: 'base-icon',
+                    html: '<span style="font-size:28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));">🏠</span>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                })
+            }).addTo(map).bindPopup("<b>🏠 Arrastrame a la Base de Salida</b>").openPopup();
 
-            if (!baseName || !targetName) {
-                alert("Por favor ingresa los datos de base y destino.");
-                return;
-            }
+            activeMarker.on('dragend', function(e) {
+                const pos = activeMarker.getLatLng();
+                baseCoords = { lat: pos.lat, lng: pos.lng };
+                logConsole(`[BASE] Fijada en: Lat ${pos.lat.toFixed(4)}, Lon ${pos.lng.toFixed(4)}`);
+                
+                // Pasar a Fase de Destino
+                initTargetPlacement();
+            });
+        }
 
-            logConsole(`[IA-GIS] Procesando coordenadas/ubicaciones precisas...`);
+        // Iniciar colocación del Destino
+        function initTargetPlacement() {
+            if (activeMarker) map.removeLayer(activeMarker);
+            
+            document.getElementById('mission-instruction').innerHTML = 'Paso 2: Arrastra la gota 🎯 al lugar del <b>Destino (Fotos/Video)</b> y suéltala.';
+
+            activeMarker = L.marker([baseCoords.lat + 0.05, baseCoords.lng + 0.05], {
+                draggable: true,
+                icon: L.divIcon({
+                    className: 'target-icon',
+                    html: '<span style="font-size:28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));">🎯</span>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                })
+            }).addTo(map).bindPopup("<b>🎯 Arrastrame al Destino Objetivo</b>").openPopup();
+
+            activeMarker.on('dragend', function(e) {
+                const pos = activeMarker.getLatLng();
+                targetCoords = { lat: pos.lat, lng: pos.lng };
+                logConsole(`[DESTINO] Fijado en: Lat ${pos.lat.toFixed(4)}, Lon ${pos.lng.toFixed(4)}`);
+
+                // Dibujar línea de ruta
+                if (pathLine) map.removeLayer(pathLine);
+                pathLine = L.polyline([
+                    [baseCoords.lat, baseCoords.lng],
+                    [targetCoords.lat, targetCoords.lng],
+                    [baseCoords.lat, baseCoords.lng]
+                ], { color: '#38bdf8', weight: 3, dashArray: '5, 5' }).addTo(map);
+
+                // Ejecutar vuelo autónomo con RTL
+                executeAutonomousMission();
+            });
+        }
+
+        async function executeAutonomousMission() {
+            document.getElementById('mission-instruction').innerHTML = '🚀 <b>Misión Activa:</b> Vuelo, Captura de Carga Útil y RTL en curso.';
+            logConsole(`[AUTÓNOMO] Iniciando tránsito Base ➔ Destino ➔ Retorno RTL...`);
 
             try {
                 const response = await fetch('/api/mission/named-flight', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ base_name: baseName, target_name: targetName })
+                    body: JSON.stringify({
+                        base_name: `${baseCoords.lat}, ${baseCoords.lng}`,
+                        target_name: `${targetCoords.lat}, ${targetCoords.lng}`
+                    })
                 });
                 const data = await response.json();
 
                 if (data.status === "SUCCESS") {
-                    logConsole(`[AUTÓNOMO] ${data.message} (${data.distance_km} km)`);
-
-                    const bounds = L.latLngBounds(
-                        [data.base.lat, data.base.lon],
-                        [data.target.lat, data.target.lon]
-                    );
-                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-
-                    if (targetMarker) {
-                        targetMarker.setLatLng([data.target.lat, data.target.lon]);
-                    } else {
-                        targetMarker = L.marker([data.target.lat, data.target.lon], {
-                            icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
-                        }).addTo(map);
-                    }
-                    targetMarker.bindPopup(`<b>🎯 Destino:</b> ${data.target.name}`).openPopup();
-
-                    baseMarker.setLatLng([data.base.lat, data.base.lon]);
-                    baseMarker.bindPopup(`<b>🏠 Base:</b> ${data.base.name}`);
-
+                    logConsole(`[FDIR/RTOS] ${data.message} (${data.distance_km} km)`);
+                    const bounds = L.latLngBounds([baseCoords.lat, baseCoords.lng], [targetCoords.lat, targetCoords.lng]);
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
                 } else {
                     logConsole(`[ERROR] ${data.message}`);
                 }
             } catch (err) {
-                logConsole(`[ERROR] Fallo al procesar la misión.`);
+                logConsole(`[ERROR] Fallo en la red de telemetría y ejecución de misión.`);
             }
+        }
+
+        function resetMissionSequence() {
+            if (pathLine) map.removeLayer(pathLine);
+            document.getElementById('mission-instruction').innerHTML = 'Paso 1: Arrastra la gota 🏠 al lugar de la <b>Base de Salida</b> y suéltala.';
+            initBasePlacement();
+            logConsole(`[SISTEMA] Secuencia de misión reiniciada.`);
         }
 
         function logConsole(msg) {
@@ -265,19 +289,8 @@
             cons.scrollTop = cons.scrollHeight;
         }
 
-        function startMission() {
-            fetch('/api/mission/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ waypoints: [] })
-            })
-            .then(res => res.json())
-            .then(data => logConsole(`[MISION] ${data.message || "Lanzamiento iniciado."}`))
-            .catch(err => logConsole("[MISION ERROR] No se pudo iniciar."));
-        }
-
         function abortMission() {
-            fetch('/api/mission/abort', { method: 'POST' }).then(() => logConsole("[MISION] ⏹ RTL activado."));
+            fetch('/api/mission/abort', { method: 'POST' }).then(() => logConsole("[MISION] ⏹ RTL activado por comando manual."));
         }
 
         function toggleFault(faultName, checkbox) {
@@ -314,13 +327,11 @@
                 }
                 telemetryChart.update('none');
 
-                let baseLat = 14.7879;
-                let baseLon = -90.1985;
-                let curLat = pkt.lat || (baseLat + (pkt.altitude * 0.00001));
-                let curLon = pkt.lon || (baseLon + (pkt.velocity * 0.000005));
-
-                rocketMarker.setLatLng([curLat, curLon]);
-                map.panTo([curLat, curLon], { animate: true });
+                if (baseCoords) {
+                    let curLat = pkt.lat || (baseCoords.lat + (pkt.altitude * 0.00001));
+                    let curLon = pkt.lon || (baseCoords.lng + (pkt.velocity * 0.000005));
+                    rocketMarker.setLatLng([curLat, curLon]);
+                }
             };
 
             ws.onopen = () => logConsole("[INFO] WebSocket conectado.");
@@ -328,6 +339,8 @@
             ws.onerror = (err) => { ws.close(); };
         }
 
+        // Iniciar al cargar
+        initBasePlacement();
         connectWS();
     </script>
 </body>

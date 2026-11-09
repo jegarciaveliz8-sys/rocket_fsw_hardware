@@ -86,7 +86,7 @@ app.include_router(replay_engine.router)
 app.include_router(pdf_reports.router)
 app.include_router(telemetry_mqtt.router)
 
-BASE_LAT, BASE_LON = 14.7883, -90.1988
+BASE_LAT, BASE_LON = 14.7879, -90.1985
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371000  
@@ -112,7 +112,19 @@ class NamedMissionRequest(BaseModel):
     target_name: str
 
 def geocode_place(place_name: str):
-    url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(place_name)}&format=json&limit=1"
+    # Diccionario de respaldo con precisión exacta (evita desviaciones de Nominatim)
+    known_locations = {
+        "municipalidad de sanarate": (14.7879, -90.1985, "Municipalidad de Sanarate, El Progreso, Guatemala"),
+        "sanarate": (14.7883, -90.1988, "Sanarate, El Progreso, Guatemala"),
+        "palacio nacional de guatemala": (14.6435, -90.5133, "Palacio Nacional de la Cultura, Zona 1, Ciudad de Guatemala")
+    }
+    
+    clean_key = place_name.strip().lower()
+    if clean_key in known_locations:
+        return known_locations[clean_key]
+
+    # Búsqueda dinámica con OSM Nominatim optimizada con addressdetails
+    url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(place_name)}&format=json&limit=1&addressdetails=1"
     headers = {'User-Agent': 'Odyssey1-GCS/1.3'}
     res = requests.get(url, headers=headers)
     data = res.json()
@@ -120,7 +132,7 @@ def geocode_place(place_name: str):
         lat = float(data[0]['lat'])
         lon = float(data[0]['lon'])
         return lat, lon, data[0].get('display_name', place_name)
-    raise ValueError(f"No se pudieron encontrar coordenadas para: {place_name}")
+    raise ValueError(f"No se pudieron encontrar coordenadas exactas para: {place_name}")
 
 @app.post("/api/mission/named-flight")
 def start_named_mission(config: NamedMissionRequest):
@@ -141,7 +153,6 @@ def start_named_mission(config: NamedMissionRequest):
             {"lat": b_lat, "lon": b_lon, "alt": 0.0, "loiter": 0, "name": "RTL (Return to Launch Base)"}
         ]
         
-        # Compatibilidad automática con atributos del navegador FSW
         if hasattr(mission_path.navigator, 'set_waypoints'):
             mission_path.navigator.set_waypoints(waypoints)
         elif hasattr(mission_path.navigator, 'waypoints'):

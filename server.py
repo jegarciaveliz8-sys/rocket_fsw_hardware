@@ -263,3 +263,52 @@ def set_launch_pad(config: LaunchPadConfig):
         "status": "SUCCESS", 
         "message": f"Base redefinida a [{BASE_LAT}, {BASE_LON}]"
     }
+
+import requests
+
+class NamedMissionRequest(BaseModel):
+    base_name: str
+    target_name: str
+
+def geocode_place(place_name: str):
+    url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(place_name)}&format=json&limit=1"
+    headers = {'User-Agent': 'Odyssey1-GCS/1.3'}
+    res = requests.get(url, headers=headers)
+    data = res.json()
+    if data and len(data) > 0:
+        lat = float(data[0]['lat'])
+        lon = float(data[0]['lon'])
+        return lat, lon, data[0].get('display_name', place_name)
+    raise ValueError(f"No se pudieron encontrar coordenadas para: {place_name}")
+
+@app.post("/api/mission/named-flight")
+def start_named_mission(config: NamedMissionRequest):
+    global BASE_LAT, BASE_LON
+    try:
+        b_lat, b_lon, b_formatted = geocode_place(config.base_name)
+        t_lat, t_lon, t_formatted = geocode_place(config.target_name)
+
+        BASE_LAT, BASE_LON = b_lat, b_lon
+
+        dist_meters = calculate_distance(b_lat, b_lon, t_lat, t_lon)
+        dist_km = round(dist_meters / 1000.0, 2)
+        cruise_altitude = max(3000.0, min(dist_meters * 0.05, 40000.0))
+
+        waypoints = [
+            {"lat": b_lat, "lon": b_lon, "alt": 100.0, "loiter": 2, "name": f"Base: {b_formatted}"},
+            {"lat": t_lat, "lon": t_lon, "alt": cruise_altitude, "loiter": 15, "name": f"Objetivo: {t_formatted}", "action": "AUTO_PAYLOAD_CAPTURE"},
+            {"lat": b_lat, "lon": b_lon, "alt": 0.0, "loiter": 0, "name": "RTL (Return to Launch Base)"}
+        ]
+        
+        mission_path.navigator.set_waypoints(waypoints)
+        mission_path.navigator.is_active = True
+
+        return {
+            "status": "SUCCESS",
+            "message": f"Misión programada hacia '{t_formatted}' ({dist_km} km). Captura de payload y RTL activos.",
+            "distance_km": dist_km,
+            "base": {"lat": b_lat, "lon": b_lon, "name": b_formatted},
+            "target": {"lat": t_lat, "lon": t_lon, "name": t_formatted}
+        }
+    except Exception as e:
+        return {"status": "ERROR", "message": str(e)}

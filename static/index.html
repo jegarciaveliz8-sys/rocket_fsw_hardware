@@ -67,6 +67,18 @@
             <h3>Control de Misión & FDIR</h3>
             <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
             <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
+            
+            <h3>Misión Global Inteligente</h3>
+            <div class="subsystem-box" style="gap: 6px;">
+                <label style="font-size: 0.75rem; color: #9ca3af;">Base (Salida):</label>
+                <input type="text" id="input-base" value="Cementerio Municipal de Sanarate" style="background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 6px; border-radius: 4px; font-size: 0.75rem;">
+                
+                <label style="font-size: 0.75rem; color: #9ca3af;">Destino (Llegada / Fotos & Video):</label>
+                <input type="text" id="input-target" value="Palacio Nacional de Guatemala" style="background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 6px; border-radius: 4px; font-size: 0.75rem;">
+                
+                <button class="btn-action" style="background: #8b5cf6; margin-top: 4px;" onclick="startNamedMission()">🛰️ INICIAR MISIÓN GLOBAL</button>
+            </div>
+
             <div class="subsystem-box" style="margin-top: 4px;">
                 <label><input type="checkbox" id="chk-batt" onchange="toggleFault('low_battery_spike', this)"> Batería Crítica (LiPo)</label>
                 <label><input type="checkbox" id="chk-rf" onchange="toggleFault('rf_blackout', this)"> Pérdida RF (Blackout)</label>
@@ -80,14 +92,6 @@
                     <option value="DSS-14">Goldstone (DSS-14)</option>
                     <option value="DSS-43">Canberra (DSS-43)</option>
                 </select>
-            </div>
-
-            <h3>Estado Subsistemas (HIL)</h3>
-            <div class="subsystem-box">
-                <span>Aviónica: <strong style="color:#34d399">NOMINAL</strong></span>
-                <span>Propulsión: <strong style="color:#38bdf8">ARMED</strong></span>
-                <span>Ruedas Inerciales: <strong style="color:#34d399">ACTIVE</strong></span>
-                <span>Red DSN: <strong id="lbl-active-dsn-name" style="color:#38bdf8">Madrid (DSS-63)</strong></span>
             </div>
         </div>
 
@@ -103,7 +107,7 @@
 
             <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema inicializado [HIL]. Doble clic para redefinir base 🏠, Clic simple para destino 🎯.<br>
+                [T+0s] Sistema inicializado [HIL]. Ingrese lugares o haga clic en el mapa.<br>
             </div>
         </div>
 
@@ -135,7 +139,6 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Inicialización de la Gráfica Chart.js
         const ctx = document.getElementById('telemetryChart').getContext('2d');
         const telemetryChart = new Chart(ctx, {
             type: 'line',
@@ -204,7 +207,6 @@
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
         let targetMarker = null;
 
-        // MARCADOR VISUAL DE LA BASE TERRENA (🏠)
         let baseMarker = L.marker([14.7883, -90.1988], {
             icon: L.divIcon({
                 className: 'base-icon',
@@ -212,97 +214,97 @@
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             })
-        }).addTo(map).bindPopup("<b>🏠 Base de Salida Actual (Ground Station)</b>");
+        }).addTo(map).bindPopup("<b>🏠 Base de Salida Actual</b>");
 
-        // 1. DOBLE CLIC: Redefinir la base de salida global en cualquier parte del mundo
+        // Función para Iniciar Misión por Nombres Inteligentes en cualquier parte del mundo
+        async function startNamedMission() {
+            const baseName = document.getElementById('input-base').value.trim();
+            const targetName = document.getElementById('input-target').value.trim();
+
+            if (!baseName || !targetName) {
+                alert("Por favor ingresa un nombre para la base y el destino.");
+                return;
+            }
+
+            logConsole(`[IA-GIS] Geocodificando Base [${baseName}] ➔ Destino [${targetName}]...`);
+
+            try {
+                const response = await fetch('/api/mission/named-flight', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ base_name: baseName, target_name: targetName })
+                });
+                const data = await response.json();
+
+                if (data.status === "SUCCESS") {
+                    logConsole(`[AUTÓNOMO] ${data.message} Distancia: ${data.distance_km} km`);
+
+                    const bounds = L.latLngBounds(
+                        [data.base.lat, data.base.lon],
+                        [data.target.lat, data.target.lon]
+                    );
+                    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+
+                    if (targetMarker) {
+                        targetMarker.setLatLng([data.target.lat, data.target.lon]);
+                    } else {
+                        targetMarker = L.marker([data.target.lat, data.target.lon], {
+                            icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
+                        }).addTo(map);
+                    }
+                    targetMarker.bindPopup(`<b>🎯 Destino (Payload/Fotos):</b> ${data.target.name}`).openPopup();
+
+                    baseMarker.setLatLng([data.base.lat, data.base.lon]);
+                    baseMarker.bindPopup(`<b>🏠 Base:</b> ${data.base.name}`);
+
+                } else {
+                    logConsole(`[ERROR] ${data.message}`);
+                }
+            } catch (err) {
+                logConsole(`[ERROR] Fallo al conectar con el motor geodésico global.`);
+            }
+        }
+
         map.on('dblclick', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
-
             logConsole(`[BASE] Redefiniendo base global en: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
-
             baseMarker.setLatLng([lat, lon]);
             baseMarker.bindPopup(`<b>🏠 Nueva Base Global</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`).openPopup();
-
             try {
-                const response = await fetch('/api/mission/set-launch-pad', {
+                await fetch('/api/mission/set-launch-pad', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lat: lat, lon: lon })
                 });
-                const data = await response.json();
-                logConsole(`[RTOS] ${data.message}`);
-            } catch (err) {
-                logConsole(`[ERROR] Fallo al sincronizar la nueva base con el FSW.`);
-            }
+            } catch (err) { console.error(err); }
         });
 
-        // 2. CLIC SIMPLE: Enviar vuelo autónomo hacia el destino seleccionado
         map.on('click', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
-
             logConsole(`[GIS] Destino seleccionado: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
-
             if (targetMarker) {
                 targetMarker.setLatLng([lat, lon]);
             } else {
                 targetMarker = L.marker([lat, lon], {
-                    icon: L.divIcon({
-                        className: 'target-icon',
-                        html: '<span style="font-size:22px;">🎯</span>',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
-                    })
+                    icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
                 }).addTo(map).bindPopup("<b>🎯 Objetivo Dinámico</b>").openPopup();
             }
-
             try {
                 await fetch('/api/mission/set_click_target', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lat: lat, lon: lon })
                 });
-
                 await fetch('/api/mission/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        waypoints: [
-                            { lat: lat, lon: lon, alt: 3000.0, loiter: 5, name: "Target-Click" }
-                        ]
-                    })
+                    body: JSON.stringify({ waypoints: [{ lat: lat, lon: lon, alt: 3000.0, loiter: 5, name: "Target-Click" }] })
                 });
-
-                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el objetivo seleccionado.`);
-            } catch (err) {
-                logConsole(`[ERROR] Fallo en la comunicación con el FSW.`);
-            }
+                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el objetivo.`);
+            } catch (err) { logConsole(`[ERROR] Fallo con el FSW.`); }
         });
-
-        const dsnStations = {
-            "DSS-63": { name: "Madrid (DSS-63)", lat: 40.4168, lon: -3.7038 },
-            "DSS-14": { name: "Goldstone (DSS-14)", lat: 35.4267, lon: -116.8900 },
-            "DSS-43": { name: "Canberra (DSS-43)", lat: -35.4014, lon: 148.9813 }
-        };
-
-        function switchDSNStation(stationKey) {
-            fetch(`/api/dsn/switch`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ station: stationKey })
-            })
-            .then(res => res.json())
-            .then(data => {
-                const st = dsnStations[stationKey];
-                if (st) {
-                    map.flyTo([st.lat, st.lon], 6, { animate: true, duration: 1.5 });
-                    document.getElementById('lbl-active-dsn-name').innerText = st.name;
-                    logConsole(`[DSN] Conmutado a ${st.name}`);
-                }
-            })
-            .catch(err => console.error("[DSN Error]", err));
-        }
 
         function logConsole(msg) {
             const cons = document.getElementById('mission-console');
@@ -378,16 +380,8 @@
             };
 
             ws.onopen = () => logConsole("[INFO] Enlace WebSocket establecido con éxito.");
-            
-            ws.onclose = () => {
-                logConsole("[WARNING] Enlace WebSocket cerrado. Reconectando en 3s...");
-                setTimeout(connectWS, 3000);
-            };
-            
-            ws.onerror = (err) => {
-                console.error("WS Error:", err);
-                ws.close();
-            };
+            ws.onclose = () => { setTimeout(connectWS, 3000); };
+            ws.onerror = (err) => { ws.close(); };
         }
 
         connectWS();
@@ -413,7 +407,7 @@
                 aiConsole.scrollTop = aiConsole.scrollHeight;
             })
             .catch(err => {
-                aiConsole.innerHTML += `<br>[AI] Analizando telemetría... Estado del RTOS nominal y tramas CCSDS estables.`;
+                aiConsole.innerHTML += `<br>[AI] Analizando telemetría... RTOS nominal.`;
                 aiConsole.scrollTop = aiConsole.scrollHeight;
             });
         }

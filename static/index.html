@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ODYSSEY-1 GCS - Mission Control Center</title>
-    <!-- Leaflet CSS -->
+    <title>ODYSSEY-1 GCS - Global Mission Control Center</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Chart.js para gráficos en tiempo real -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -18,7 +16,7 @@
         .nav-links a:hover, .nav-links a.active { color: #38bdf8; font-weight: bold; }
         .badge { background: #065f46; color: #34d399; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
         
-        .main-container { display: grid; grid-template-columns: 320px 1fr 320px; gap: 12px; padding: 12px; flex: 1; overflow: hidden; }
+        .main-container { display: grid; grid-template-columns: 280px 1fr 280px; gap: 12px; padding: 12px; flex: 1; overflow: hidden; }
         .panel { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
         .panel h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; border-bottom: 1px solid #1f2937; padding-bottom: 6px; margin-bottom: 4px; }
         
@@ -32,15 +30,45 @@
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
         
-        #map { width: 100%; height: 260px; border-radius: 6px; border: 1px solid #1f2937; }
-        .console { background: #030712; color: #4ade80; font-family: monospace; font-size: 0.75rem; padding: 8px; border-radius: 6px; height: 120px; overflow-y: auto; border: 1px solid #1f2937; }
+        /* Contenedor del mapa y barra flotante estilo Google Maps */
+        .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; border-radius: 6px; overflow: hidden; border: 1px solid #1f2937; }
+        #map { width: 100%; height: 100%; }
+        
+        .search-overlay {
+            position: absolute;
+            top: 15px;
+            left: 50px;
+            z-index: 1000;
+            background: rgba(17, 24, 39, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            border: 1px solid #374151;
+            width: 360px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            backdrop-filter: blur(5px);
+        }
+        .search-overlay input {
+            background: #030712;
+            color: #f3f4f6;
+            border: 1px solid #4b5563;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            width: 100%;
+        }
+        .search-overlay input:focus { border-color: #38bdf8; outline: none; }
+
+        .console { background: #030712; color: #4ade80; font-family: monospace; font-size: 0.75rem; padding: 8px; border-radius: 6px; height: 110px; overflow-y: auto; border: 1px solid #1f2937; }
         .subsystem-box { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
         .subsystem-box label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
     <header>
-        <h1>🚀 ODYSSEY-1 GCS [Sanarate Ground Station & HIL]</h1>
+        <h1>🚀 ODYSSEY-1 GCS [Global Satellite Mission Planner]</h1>
         <div class="nav-links">
             <a href="/" class="active">🚀 Flight Deck</a>
             <a href="/command">⚠️ Command</a>
@@ -67,17 +95,6 @@
             <h3>Control de Misión & FDIR</h3>
             <button class="btn-action" onclick="startMission()">▶ INICIAR LANZAMIENTO</button>
             <button class="btn-action btn-danger" onclick="abortMission()">⏹ ABORTAR / RTL</button>
-            
-            <h3>Misión Global Inteligente</h3>
-            <div class="subsystem-box" style="gap: 6px;">
-                <label style="font-size: 0.75rem; color: #9ca3af;">Base (Salida):</label>
-                <input type="text" id="input-base" value="Cementerio Municipal de Sanarate" style="background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 6px; border-radius: 4px; font-size: 0.75rem;">
-                
-                <label style="font-size: 0.75rem; color: #9ca3af;">Destino (Llegada / Fotos & Video):</label>
-                <input type="text" id="input-target" value="Palacio Nacional de Guatemala" style="background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 6px; border-radius: 4px; font-size: 0.75rem;">
-                
-                <button class="btn-action" style="background: #8b5cf6; margin-top: 4px;" onclick="startNamedMission()">🛰️ INICIAR MISIÓN GLOBAL</button>
-            </div>
 
             <div class="subsystem-box" style="margin-top: 4px;">
                 <label><input type="checkbox" id="chk-batt" onchange="toggleFault('low_battery_spike', this)"> Batería Crítica (LiPo)</label>
@@ -95,19 +112,24 @@
             </div>
         </div>
 
-        <!-- COLUMNA CENTRAL -->
-        <div class="panel">
-            <h3>📡 GIS & Radar Táctico (Doble clic: Base 🏠 | Clic: Destino 🎯)</h3>
-            <div id="map"></div>
-
-            <h3>Curva de Altitud & Batería</h3>
-            <div style="background: #1f2937; height: 115px; border-radius: 6px; padding: 4px; position: relative;">
-                <canvas id="telemetryChart" style="width: 100%; height: 100%;"></canvas>
-            </div>
-
-            <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
-            <div class="console" id="mission-console">
-                [T+0s] Sistema inicializado [HIL]. Ingrese lugares o haga clic en el mapa.<br>
+        <!-- COLUMNA CENTRAL: MAPA CON BARRA FLOTANTE ESTILO GOOGLE MAPS -->
+        <div class="panel" style="padding: 0; overflow: hidden; position: relative;">
+            <div class="map-wrapper">
+                <!-- Barra de búsqueda flotante tipo Google Maps Satellite -->
+                <div class="search-overlay">
+                    <div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase;">🌍 Buscador de Misión Global</div>
+                    <div>
+                        <span style="font-size: 0.7rem; color: #9ca3af;">🏠 Base de Salida:</span>
+                        <input type="text" id="input-base" value="Municipalidad de Sanarate">
+                    </div>
+                    <div>
+                        <span style="font-size: 0.7rem; color: #9ca3af;">🎯 Destino (Payload / Fotos & Video):</span>
+                        <input type="text" id="input-target" value="Palacio Nacional de Guatemala">
+                    </div>
+                    <button class="btn-action" style="background: #8b5cf6; margin-top: 2px;" onclick="startNamedMission()">🛰️ INICIAR RUTA Y CAPTURA</button>
+                </div>
+                
+                <div id="map"></div>
             </div>
         </div>
 
@@ -120,18 +142,14 @@
                 <div class="metric-card" style="grid-column: span 2;"><span>Yaw</span><strong id="val-yaw">0.0°</strong></div>
             </div>
 
-            <h3>Inspector CCSDS Crudo</h3>
-            <div class="console" id="ccsds-inspector" style="height: 90px; color: #38bdf8;">
-                Esperando trama binaria...
+            <h3>Curva de Altitud & Batería</h3>
+            <div style="background: #1f2937; height: 110px; border-radius: 6px; padding: 4px; position: relative;">
+                <canvas id="telemetryChart" style="width: 100%; height: 100%;"></canvas>
             </div>
 
-            <h3>Copiloto AI (Gemini FSW)</h3>
-            <div class="console" id="ai-console" style="height: 110px; color: #34d399; overflow-y: auto;">
-                [AI] Copiloto conectado a Gemini. Listo para diagnósticos de vuelo y telemetría en tiempo real.
-            </div>
-            <div style="display: flex; gap: 4px; margin-top: 4px;">
-                <input type="text" id="ai-input" placeholder="Pregúntale al copiloto..." style="flex: 1; background: #030712; color: #f3f4f6; border: 1px solid #1f2937; padding: 4px; border-radius: 4px; font-size: 0.75rem;" onkeydown="if(event.key==='Enter') sendAIChat()">
-                <button onclick="sendAIChat()" style="background: #2563eb; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">Enviar</button>
+            <h3>Consola de Misión (RTOS / CCSDS)</h3>
+            <div class="console" id="mission-console">
+                [T+0s] Sistema listo. Ingrese ubicaciones arriba o use doble clic (Base) / clic (Destino).<br>
             </div>
         </div>
     </div>
@@ -145,64 +163,45 @@
             data: {
                 labels: [],
                 datasets: [
-                    {
-                        label: 'Altitud (m)',
-                        data: [],
-                        borderColor: '#38bdf8',
-                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                        borderWidth: 2,
-                        yAxisID: 'y',
-                        tension: 0.2,
-                        pointRadius: 0
-                    },
-                    {
-                        label: 'Batería (%)',
-                        data: [],
-                        borderColor: '#34d399',
-                        backgroundColor: 'rgba(52, 211, 153, 0.1)',
-                        borderWidth: 2,
-                        yAxisID: 'y1',
-                        tension: 0.2,
-                        pointRadius: 0
-                    }
+                    { label: 'Altitud (m)', data: [], borderColor: '#38bdf8', borderWidth: 2, yAxisID: 'y', tension: 0.2, pointRadius: 0 },
+                    { label: 'Batería (%)', data: [], borderColor: '#34d399', borderWidth: 2, yAxisID: 'y1', tension: 0.2, pointRadius: 0 }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { ticks: { color: '#9ca3af', font: { size: 9 } }, grid: { color: '#1f2937' } },
-                    y: { type: 'linear', display: true, position: 'left', ticks: { color: '#38bdf8', font: { size: 9 } }, grid: { color: '#1f2937' } },
-                    y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#34d399', font: { size: 9 } }, grid: { drawOnChartArea: false } }
+                    x: { ticks: { color: '#9ca3af', font: { size: 8 } }, grid: { color: '#1f2937' } },
+                    y: { type: 'linear', display: true, position: 'left', ticks: { color: '#38bdf8', font: { size: 8 } }, grid: { color: '#1f2937' } },
+                    y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, ticks: { color: '#34d399', font: { size: 8 } }, grid: { drawOnChartArea: false } }
                 },
-                plugins: { legend: { labels: { color: '#f3f4f6', font: { size: 10 } } } }
+                plugins: { legend: { labels: { color: '#f3f4f6', font: { size: 9 } } } }
             }
         });
 
-        const map = L.map('map', { doubleClickZoom: false }).setView([14.7883, -90.1988], 13);
+        // Configuración inicial del mapa con capa satelital por defecto (Esri World Imagery)
+        const map = L.map('map', { doubleClickZoom: false }).setView([14.7883, -90.1988], 12);
 
         const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
             attribution: 'Tiles &copy; Esri'
-        });
+        }).addTo(map);
 
         const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
             attribution: '&copy; CARTO'
-        }).addTo(map);
+        });
 
         const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap'
         });
 
-        const baseLayers = {
+        L.control.layers({
             "Satelital (Esri)": satLayer,
             "Táctico Oscuro (Carto)": darkLayer,
             "Estándar (OSM)": osmLayer
-        };
-
-        L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
+        }, null, { position: 'bottomright' }).addTo(map);
 
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
         let targetMarker = null;
@@ -214,19 +213,19 @@
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             })
-        }).addTo(map).bindPopup("<b>🏠 Base de Salida Actual</b>");
+        }).addTo(map).bindPopup("<b>🏠 Base de Salida</b>");
 
-        // Función para Iniciar Misión por Nombres Inteligentes en cualquier parte del mundo
+        // Ejecutar misión global por nombres desde la barra flotante
         async function startNamedMission() {
             const baseName = document.getElementById('input-base').value.trim();
             const targetName = document.getElementById('input-target').value.trim();
 
             if (!baseName || !targetName) {
-                alert("Por favor ingresa un nombre para la base y el destino.");
+                alert("Por favor ingresa la base y el destino.");
                 return;
             }
 
-            logConsole(`[IA-GIS] Geocodificando Base [${baseName}] ➔ Destino [${targetName}]...`);
+            logConsole(`[IA-GIS] Geocodificando satelitalmente: Base [${baseName}] ➔ Destino [${targetName}]...`);
 
             try {
                 const response = await fetch('/api/mission/named-flight', {
@@ -252,7 +251,7 @@
                             icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
                         }).addTo(map);
                     }
-                    targetMarker.bindPopup(`<b>🎯 Destino (Payload/Fotos):</b> ${data.target.name}`).openPopup();
+                    targetMarker.bindPopup(`<b>🎯 Destino (Fotos/Video):</b> ${data.target.name}`).openPopup();
 
                     baseMarker.setLatLng([data.base.lat, data.base.lon]);
                     baseMarker.bindPopup(`<b>🏠 Base:</b> ${data.base.name}`);
@@ -261,16 +260,16 @@
                     logConsole(`[ERROR] ${data.message}`);
                 }
             } catch (err) {
-                logConsole(`[ERROR] Fallo al conectar con el motor geodésico global.`);
+                logConsole(`[ERROR] Fallo al conectar con el motor geodésico.`);
             }
         }
 
         map.on('dblclick', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
-            logConsole(`[BASE] Redefiniendo base global en: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
+            logConsole(`[BASE] Base redefinida: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
             baseMarker.setLatLng([lat, lon]);
-            baseMarker.bindPopup(`<b>🏠 Nueva Base Global</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`).openPopup();
+            baseMarker.bindPopup(`<b>🏠 Nueva Base</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`).openPopup();
             try {
                 await fetch('/api/mission/set-launch-pad', {
                     method: 'POST',
@@ -283,7 +282,7 @@
         map.on('click', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
-            logConsole(`[GIS] Destino seleccionado: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
+            logConsole(`[GIS] Destino temporal: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
             if (targetMarker) {
                 targetMarker.setLatLng([lat, lon]);
             } else {
@@ -302,7 +301,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ waypoints: [{ lat: lat, lon: lon, alt: 3000.0, loiter: 5, name: "Target-Click" }] })
                 });
-                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el objetivo.`);
+                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el punto seleccionado.`);
             } catch (err) { logConsole(`[ERROR] Fallo con el FSW.`); }
         });
 
@@ -373,44 +372,14 @@
 
                 rocketMarker.setLatLng([curLat, curLon]);
                 map.panTo([curLat, curLon], { animate: true });
-
-                if (pkt.ccsds_frame) {
-                    document.getElementById('ccsds-inspector').innerText = pkt.ccsds_frame;
-                }
             };
 
-            ws.onopen = () => logConsole("[INFO] Enlace WebSocket establecido con éxito.");
+            ws.onopen = () => logConsole("[INFO] WebSocket conectado.");
             ws.onclose = () => { setTimeout(connectWS, 3000); };
             ws.onerror = (err) => { ws.close(); };
         }
 
         connectWS();
-
-        function sendAIChat() {
-            const inputField = document.getElementById('ai-input');
-            const aiConsole = document.getElementById('ai-console');
-            const query = inputField.value.trim();
-            if (!query) return;
-
-            aiConsole.innerHTML += `<br><span style="color: #38bdf8;">> ${query}</span>`;
-            inputField.value = '';
-            aiConsole.scrollTop = aiConsole.scrollHeight;
-
-            fetch('/api/ai/diagnose', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: query })
-            })
-            .then(res => res.json())
-            .then(data => {
-                aiConsole.innerHTML += `<br>[AI] ${data.response || data.message || "Diagnóstico completado."}`;
-                aiConsole.scrollTop = aiConsole.scrollHeight;
-            })
-            .catch(err => {
-                aiConsole.innerHTML += `<br>[AI] Analizando telemetría... RTOS nominal.`;
-                aiConsole.scrollTop = aiConsole.scrollHeight;
-            });
-        }
     </script>
 </body>
 </html>

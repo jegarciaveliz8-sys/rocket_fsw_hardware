@@ -30,7 +30,6 @@
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
         
-        /* Contenedor del mapa y barra flotante estilo Google Maps */
         .map-wrapper { position: relative; width: 100%; height: 100%; flex: 1; border-radius: 6px; overflow: hidden; border: 1px solid #1f2937; }
         #map { width: 100%; height: 100%; }
         
@@ -112,10 +111,9 @@
             </div>
         </div>
 
-        <!-- COLUMNA CENTRAL: MAPA CON BARRA FLOTANTE ESTILO GOOGLE MAPS -->
+        <!-- COLUMNA CENTRAL: MAPA CON BARRA FLOTANTE EXCLUSIVA DE BÚSQUEDA -->
         <div class="panel" style="padding: 0; overflow: hidden; position: relative;">
             <div class="map-wrapper">
-                <!-- Barra de búsqueda flotante tipo Google Maps Satellite -->
                 <div class="search-overlay">
                     <div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase;">🌍 Buscador de Misión Global</div>
                     <div>
@@ -126,7 +124,7 @@
                         <span style="font-size: 0.7rem; color: #9ca3af;">🎯 Destino (Payload / Fotos & Video):</span>
                         <input type="text" id="input-target" value="Palacio Nacional de Guatemala">
                     </div>
-                    <button class="btn-action" style="background: #8b5cf6; margin-top: 2px;" onclick="startNamedMission()">🛰️ INICIAR RUTA Y CAPTURA</button>
+                    <button class="btn-action" style="background: #8b5cf6; margin-top: 2px;" onclick="startNamedMission()">🛰️ BUSCAR Y EJECUTAR MISIÓN</button>
                 </div>
                 
                 <div id="map"></div>
@@ -149,7 +147,7 @@
 
             <h3>Consola de Misión (RTOS / CCSDS)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema listo. Ingrese ubicaciones arriba o use doble clic (Base) / clic (Destino).<br>
+                [T+0s] Sistema listo. Utilice el buscador superior para planificar la misión global.<br>
             </div>
         </div>
     </div>
@@ -179,8 +177,8 @@
             }
         });
 
-        // Configuración inicial del mapa con capa satelital por defecto (Esri World Imagery)
-        const map = L.map('map', { doubleClickZoom: false }).setView([14.7883, -90.1988], 12);
+        // Configuración inicial del mapa con capa satelital Esri
+        const map = L.map('map', { zoomControl: true }).setView([14.7883, -90.1988], 12);
 
         const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
@@ -205,7 +203,6 @@
 
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
         let targetMarker = null;
-
         let baseMarker = L.marker([14.7883, -90.1988], {
             icon: L.divIcon({
                 className: 'base-icon',
@@ -215,17 +212,17 @@
             })
         }).addTo(map).bindPopup("<b>🏠 Base de Salida</b>");
 
-        // Ejecutar misión global por nombres desde la barra flotante
+        // Ejecutar misión global por nombres exclusivamente desde el buscador
         async function startNamedMission() {
             const baseName = document.getElementById('input-base').value.trim();
             const targetName = document.getElementById('input-target').value.trim();
 
             if (!baseName || !targetName) {
-                alert("Por favor ingresa la base y el destino.");
+                alert("Por favor ingresa un nombre para la base y el destino.");
                 return;
             }
 
-            logConsole(`[IA-GIS] Geocodificando satelitalmente: Base [${baseName}] ➔ Destino [${targetName}]...`);
+            logConsole(`[IA-GIS] Buscando coordenadas globales: [${baseName}] ➔ [${targetName}]...`);
 
             try {
                 const response = await fetch('/api/mission/named-flight', {
@@ -236,7 +233,7 @@
                 const data = await response.json();
 
                 if (data.status === "SUCCESS") {
-                    logConsole(`[AUTÓNOMO] ${data.message} Distancia: ${data.distance_km} km`);
+                    logConsole(`[AUTÓNOMO] ${data.message} (${data.distance_km} km)`);
 
                     const bounds = L.latLngBounds(
                         [data.base.lat, data.base.lon],
@@ -251,7 +248,7 @@
                             icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
                         }).addTo(map);
                     }
-                    targetMarker.bindPopup(`<b>🎯 Destino (Fotos/Video):</b> ${data.target.name}`).openPopup();
+                    targetMarker.bindPopup(`<b>🎯 Destino (Payload / Fotos & Video):</b> ${data.target.name}`).openPopup();
 
                     baseMarker.setLatLng([data.base.lat, data.base.lon]);
                     baseMarker.bindPopup(`<b>🏠 Base:</b> ${data.base.name}`);
@@ -263,47 +260,6 @@
                 logConsole(`[ERROR] Fallo al conectar con el motor geodésico.`);
             }
         }
-
-        map.on('dblclick', async function(e) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
-            logConsole(`[BASE] Base redefinida: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
-            baseMarker.setLatLng([lat, lon]);
-            baseMarker.bindPopup(`<b>🏠 Nueva Base</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`).openPopup();
-            try {
-                await fetch('/api/mission/set-launch-pad', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat: lat, lon: lon })
-                });
-            } catch (err) { console.error(err); }
-        });
-
-        map.on('click', async function(e) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
-            logConsole(`[GIS] Destino temporal: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
-            if (targetMarker) {
-                targetMarker.setLatLng([lat, lon]);
-            } else {
-                targetMarker = L.marker([lat, lon], {
-                    icon: L.divIcon({ className: 'target-icon', html: '<span style="font-size:22px;">🎯</span>', iconSize: [24, 24], iconAnchor: [12, 12] })
-                }).addTo(map).bindPopup("<b>🎯 Objetivo Dinámico</b>").openPopup();
-            }
-            try {
-                await fetch('/api/mission/set_click_target', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat: lat, lon: lon })
-                });
-                await fetch('/api/mission/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ waypoints: [{ lat: lat, lon: lon, alt: 3000.0, loiter: 5, name: "Target-Click" }] })
-                });
-                logConsole(`[AUTÓNOMO] Vuelo iniciado hacia el punto seleccionado.`);
-            } catch (err) { logConsole(`[ERROR] Fallo con el FSW.`); }
-        });
 
         function logConsole(msg) {
             const cons = document.getElementById('mission-console');
@@ -317,8 +273,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     waypoints: [
-                        { lat: 14.7920, lon: -90.2010, alt: 100.0, loiter: 5, name: "WP-Sanarate-1" },
-                        { lat: 14.8050, lon: -90.2150, alt: 500.0, loiter: 10, name: "WP-Summit-2" }
+                        { lat: 14.7920, lon: -90.2010, alt: 100.0, loiter: 5, name: "WP-Sanarate-1" }
                     ]
                 })
             })

@@ -93,7 +93,7 @@
 
         <!-- COLUMNA CENTRAL -->
         <div class="panel">
-            <h3>📡 GIS & Radar Táctico (Haz clic para vuelo autónomo)</h3>
+            <h3>📡 GIS & Radar Táctico (Doble clic: Base 🏠 | Clic: Destino 🎯)</h3>
             <div id="map"></div>
 
             <h3>Curva de Altitud & Batería</h3>
@@ -103,7 +103,7 @@
 
             <h3>Consola de Misión (RTOS / CCSDS / FDIR)</h3>
             <div class="console" id="mission-console">
-                [T+0s] Sistema inicializado en Sanarate [HIL]. Haz clic en cualquier lugar del mapa para volar automáticamente.<br>
+                [T+0s] Sistema inicializado [HIL]. Doble clic para redefinir base 🏠, Clic simple para destino 🎯.<br>
             </div>
         </div>
 
@@ -176,7 +176,7 @@
             }
         });
 
-        const map = L.map('map').setView([14.7883, -90.1988], 13);
+        const map = L.map('map', { doubleClickZoom: false }).setView([14.7883, -90.1988], 13);
 
         const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
@@ -204,7 +204,40 @@
         let rocketMarker = L.marker([14.7883, -90.1988]).addTo(map);
         let targetMarker = null;
 
-        // CAPTURAR CLIC EN EL MAPA E INICIAR VUELO AUTÓNOMO INMEDIATO
+        // MARCADOR VISUAL DE LA BASE TERRENA (🏠)
+        let baseMarker = L.marker([14.7883, -90.1988], {
+            icon: L.divIcon({
+                className: 'base-icon',
+                html: '<span style="font-size:22px;">🏠</span>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            })
+        }).addTo(map).bindPopup("<b>🏠 Base de Salida Actual (Ground Station)</b>");
+
+        // 1. DOBLE CLIC: Redefinir la base de salida global en cualquier parte del mundo
+        map.on('dblclick', async function(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+
+            logConsole(`[BASE] Redefiniendo base global en: Lat ${lat.toFixed(4)}, Lon ${lon.toFixed(4)}`);
+
+            baseMarker.setLatLng([lat, lon]);
+            baseMarker.bindPopup(`<b>🏠 Nueva Base Global</b><br>Lat: ${lat.toFixed(4)}, Lon: ${lon.toFixed(4)}`).openPopup();
+
+            try {
+                const response = await fetch('/api/mission/set-launch-pad', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: lat, lon: lon })
+                });
+                const data = await response.json();
+                logConsole(`[RTOS] ${data.message}`);
+            } catch (err) {
+                logConsole(`[ERROR] Fallo al sincronizar la nueva base con el FSW.`);
+            }
+        });
+
+        // 2. CLIC SIMPLE: Enviar vuelo autónomo hacia el destino seleccionado
         map.on('click', async function(e) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
@@ -319,7 +352,6 @@
                 document.getElementById('val-roll').innerText = `${(pkt.roll || 0).toFixed(1)}°`;
                 document.getElementById('val-yaw').innerText = `${(pkt.yaw || 0).toFixed(1)}°`;
 
-                // Alimentar la gráfica en tiempo real con los paquetes del WebSocket
                 const timeLabel = `T+${pkt.time}s`;
                 telemetryChart.data.labels.push(timeLabel);
                 telemetryChart.data.datasets[0].data.push(pkt.altitude);

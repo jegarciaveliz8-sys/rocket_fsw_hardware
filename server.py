@@ -246,3 +246,20 @@ def get_ui_info():
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+
+from pydantic import BaseModel
+
+class LaunchPadConfig(BaseModel):
+    lat: float
+    lon: float
+
+@app.post("/api/mission/set-launch-pad")
+def set_launch_pad(config: LaunchPadConfig):
+    global BASE_LAT, BASE_LON
+    BASE_LAT = config.lat
+    BASE_LON = config.lon
+    print(f"🌍 Base de salida global actualizada a: [{BASE_LAT}, {BASE_LON}]")
+    return {
+        "status": "SUCCESS", 
+        "message": f"Base redefinida a [{BASE_LAT}, {BASE_LON}]"
+    }
